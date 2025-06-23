@@ -8,48 +8,17 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	GRPC     GRPCConfig     `mapstructure:"grpc"`
-	Database DatabaseConfig `mapstructure:"database"`
-	Redis    RedisConfig    `mapstructure:"redis"`
+	App      AppConfig      `mapstructure:"app"`
 	Auth     AuthConfig     `mapstructure:"auth"`
-	RabbitMQ RabbitMQConfig `mapstructure:"rabbitmq"`
-	Kafka    KafkaConfig    `mapstructure:"kafka"`
-	NSQ      NSQConfig      `mapstructure:"nsq"`
-	NATS     NATSConfig     `mapstructure:"nats"`
+	Database DatabaseConfig `mapstructure:"database"`
+	GRPC     GRPCConfig     `mapstructure:"grpc"`
+	Services ServicesConfig `mapstructure:"services"`
 }
 
-type ServerConfig struct {
-	Host         string        `mapstructure:"host"`
-	Port         string        `mapstructure:"port"`
-	ReadTimeout  time.Duration `mapstructure:"read_timeout"`
-	WriteTimeout time.Duration `mapstructure:"write_timeout"`
-}
-
-type DatabaseConfig struct {
-	Postgres PostgresConfig `mapstructure:"postgres"`
-	MongoDB  MongoDBConfig  `mapstructure:"mongodb"`
-}
-
-type PostgresConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     string `mapstructure:"port"`
-	User     string `mapstructure:"user"`
-	Password string `mapstructure:"password"`
-	DBName   string `mapstructure:"dbname"`
-	SSLMode  string `mapstructure:"sslmode"`
-}
-
-type MongoDBConfig struct {
-	URI      string `mapstructure:"uri"`
-	Database string `mapstructure:"database"`
-}
-
-type RedisConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     string `mapstructure:"port"`
-	Password string `mapstructure:"password"`
-	DB       int    `mapstructure:"db"`
+type AppConfig struct {
+	Name    string `mapstructure:"name"`
+	Version string `mapstructure:"version"`
+	Port    int    `mapstructure:"port"`
 }
 
 type AuthConfig struct {
@@ -62,30 +31,27 @@ type JWTConfig struct {
 	RefreshExpiry time.Duration `mapstructure:"refresh_expiry"`
 }
 
-type RabbitMQConfig struct {
+type DatabaseConfig struct {
 	Host     string `mapstructure:"host"`
-	Port     string `mapstructure:"port"`
+	Port     int    `mapstructure:"port"`
+	Name     string `mapstructure:"name"`
 	User     string `mapstructure:"user"`
 	Password string `mapstructure:"password"`
-	VHost    string `mapstructure:"vhost"`
-}
-
-type KafkaConfig struct {
-	Brokers []string `mapstructure:"brokers"`
-	GroupID string   `mapstructure:"group_id"`
-}
-
-type NSQConfig struct {
-	Host string `mapstructure:"host"`
-	Port string `mapstructure:"port"`
-}
-
-type NATSConfig struct {
-	URL     string `mapstructure:"url"`
-	Cluster string `mapstructure:"cluster"`
+	SSLMode  string `mapstructure:"sslmode"`
 }
 
 type GRPCConfig struct {
+	Host string `mapstructure:"host"`
+	Port int    `mapstructure:"port"`
+}
+
+type ServicesConfig struct {
+	Order   ServiceConfig `mapstructure:"order"`
+	Payment ServiceConfig `mapstructure:"payment"`
+	Cart    ServiceConfig `mapstructure:"cart"`
+}
+
+type ServiceConfig struct {
 	Host string `mapstructure:"host"`
 	Port int    `mapstructure:"port"`
 }
@@ -102,38 +68,22 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	var config Config
-	if err := viper.Unmarshal(&config); err != nil {
+	config := &Config{}
+	if err := viper.Unmarshal(config); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	return &config, nil
+	return config, nil
 }
 
 // GetPostgresDSN returns PostgreSQL connection string
 func (c *Config) GetPostgresDSN() string {
-	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		c.Database.Postgres.Host,
-		c.Database.Postgres.Port,
-		c.Database.Postgres.User,
-		c.Database.Postgres.Password,
-		c.Database.Postgres.DBName,
-		c.Database.Postgres.SSLMode,
+	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		c.Database.Host,
+		c.Database.Port,
+		c.Database.User,
+		c.Database.Password,
+		c.Database.Name,
+		c.Database.SSLMode,
 	)
-}
-
-// GetRabbitMQURL returns RabbitMQ connection URL
-func (c *Config) GetRabbitMQURL() string {
-	return fmt.Sprintf("amqp://%s:%s@%s:%s/%s",
-		c.RabbitMQ.User,
-		c.RabbitMQ.Password,
-		c.RabbitMQ.Host,
-		c.RabbitMQ.Port,
-		c.RabbitMQ.VHost,
-	)
-}
-
-// GetRedisAddr returns Redis address
-func (c *Config) GetRedisAddr() string {
-	return fmt.Sprintf("%s:%s", c.Redis.Host, c.Redis.Port)
 }

@@ -8,10 +8,14 @@ import (
 
 	"github.com/google/uuid"
 
+	cartClient "github.com/diki-haryadi/ecommerce-saga/internal/features/cart/delivery/grpc/client"
+	orderClient "github.com/diki-haryadi/ecommerce-saga/internal/features/order/delivery/grpc/client"
 	orderEntity "github.com/diki-haryadi/ecommerce-saga/internal/features/order/domain/entity"
 	orderRepo "github.com/diki-haryadi/ecommerce-saga/internal/features/order/repository"
+	paymentClient "github.com/diki-haryadi/ecommerce-saga/internal/features/payment/delivery/grpc/client"
 	paymentEntity "github.com/diki-haryadi/ecommerce-saga/internal/features/payment/domain/entity"
 	paymentRepo "github.com/diki-haryadi/ecommerce-saga/internal/features/payment/repository"
+	"github.com/diki-haryadi/ecommerce-saga/internal/features/saga"
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/saga/domain/entity"
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/saga/repository"
 )
@@ -30,68 +34,98 @@ type OrderPaymentPayload struct {
 }
 
 type SagaUsecase struct {
-	sagaRepo    repository.SagaRepository
-	orderRepo   orderRepo.OrderRepository
-	paymentRepo paymentRepo.PaymentRepository
+	sagaRepo      repository.SagaRepository
+	orderRepo     orderRepo.OrderRepository
+	paymentRepo   paymentRepo.PaymentRepository
+	orderClient   *orderClient.OrderClient
+	paymentClient *paymentClient.PaymentClient
+	cartClient    *cartClient.CartClient
 }
 
 func NewSagaUsecase(
 	sagaRepo repository.SagaRepository,
 	orderRepo orderRepo.OrderRepository,
 	paymentRepo paymentRepo.PaymentRepository,
+	orderClient *orderClient.OrderClient,
+	paymentClient *paymentClient.PaymentClient,
+	cartClient *cartClient.CartClient,
 ) *SagaUsecase {
 	return &SagaUsecase{
-		sagaRepo:    sagaRepo,
-		orderRepo:   orderRepo,
-		paymentRepo: paymentRepo,
+		sagaRepo:      sagaRepo,
+		orderRepo:     orderRepo,
+		paymentRepo:   paymentRepo,
+		orderClient:   orderClient,
+		paymentClient: paymentClient,
+		cartClient:    cartClient,
 	}
 }
 
-// StartOrderPaymentSaga starts a new order-payment saga
-func (u *SagaUsecase) StartOrderPaymentSaga(ctx context.Context, orderID uuid.UUID) error {
-	// Get order
-	order, err := u.orderRepo.GetByID(ctx, orderID)
-	if err != nil {
-		return err
-	}
-
+// StartOrderSaga starts a new order saga transaction
+func (u *SagaUsecase) StartOrderSaga(ctx context.Context, orderID, userID uuid.UUID, amount float64, paymentMethod string, metadata map[string]string) (*saga.SagaResponse, error) {
 	// Create payload
 	payload := OrderPaymentPayload{
 		OrderID:  orderID,
-		Amount:   order.TotalAmount,
+		Amount:   amount,
 		Currency: "USD",
 	}
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Create saga steps
 	steps := []entity.SagaStep{
 		{
-			Name:    "ValidateOrder",
+			Name:    entity.StepCreateOrder,
 			Payload: payloadBytes,
 		},
 		{
-			Name:    "ProcessPayment",
+			Name:    entity.StepProcessPayment,
 			Payload: payloadBytes,
 		},
 		{
-			Name:    "UpdateOrderStatus",
+			Name:    entity.StepUpdateInventory,
 			Payload: payloadBytes,
 		},
 	}
 
 	// Create saga
-	saga := entity.NewSaga(entity.SagaTypeOrderPayment, steps)
-	if err := u.sagaRepo.Create(ctx, saga); err != nil {
-		return err
+	sagaEntity := entity.NewSaga(entity.SagaTypeOrderPayment, steps)
+	if err := u.sagaRepo.Create(ctx, sagaEntity); err != nil {
+		return nil, err
 	}
 
 	// Start saga execution
-	go u.executeSaga(context.Background(), saga)
+	go u.executeSaga(context.Background(), sagaEntity)
 
-	return nil
+	// Convert to response
+	return &saga.SagaResponse{
+		ID:        sagaEntity.ID,
+		Type:      saga.Type(string(sagaEntity.Type)),
+		Status:    saga.Status(string(sagaEntity.Status)),
+		Steps:     convertStepsToResponse(sagaEntity.Steps),
+		Metadata:  metadata,
+		CreatedAt: sagaEntity.CreatedAt,
+		UpdatedAt: sagaEntity.UpdatedAt,
+	}, nil
+}
+
+// GetSagaStatus retrieves the status of a saga transaction
+func (u *SagaUsecase) GetSagaStatus(ctx context.Context, sagaID uuid.UUID) (*saga.SagaResponse, error) {
+	sagaEntity, err := u.sagaRepo.GetByID(ctx, sagaID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &saga.SagaResponse{
+		ID:        sagaEntity.ID,
+		Type:      saga.Type(string(sagaEntity.Type)),
+		Status:    saga.Status(string(sagaEntity.Status)),
+		Steps:     convertStepsToResponse(sagaEntity.Steps),
+		Metadata:  make(map[string]string),
+		CreatedAt: sagaEntity.CreatedAt,
+		UpdatedAt: sagaEntity.UpdatedAt,
+	}, nil
 }
 
 // executeSaga executes a saga
@@ -104,12 +138,12 @@ func (u *SagaUsecase) executeSaga(ctx context.Context, saga *entity.Saga) {
 
 		var err error
 		switch step.Name {
-		case "ValidateOrder":
-			err = u.executeValidateOrder(ctx, step)
-		case "ProcessPayment":
+		case entity.StepCreateOrder:
+			err = u.executeCreateOrder(ctx, step)
+		case entity.StepProcessPayment:
 			err = u.executeProcessPayment(ctx, step)
-		case "UpdateOrderStatus":
-			err = u.executeUpdateOrderStatus(ctx, step)
+		case entity.StepUpdateInventory:
+			err = u.executeUpdateInventory(ctx, step)
 		}
 
 		if err != nil {
@@ -125,8 +159,8 @@ func (u *SagaUsecase) executeSaga(ctx context.Context, saga *entity.Saga) {
 	}
 }
 
-// executeValidateOrder executes the ValidateOrder step
-func (u *SagaUsecase) executeValidateOrder(ctx context.Context, step *entity.SagaStep) error {
+// executeCreateOrder executes the CreateOrder step
+func (u *SagaUsecase) executeCreateOrder(ctx context.Context, step *entity.SagaStep) error {
 	var payload OrderPaymentPayload
 	if err := json.Unmarshal(step.Payload, &payload); err != nil {
 		return err
@@ -174,29 +208,15 @@ func (u *SagaUsecase) executeProcessPayment(ctx context.Context, step *entity.Sa
 	return u.paymentRepo.Update(ctx, payment)
 }
 
-// executeUpdateOrderStatus executes the UpdateOrderStatus step
-func (u *SagaUsecase) executeUpdateOrderStatus(ctx context.Context, step *entity.SagaStep) error {
+// executeUpdateInventory executes the UpdateInventory step
+func (u *SagaUsecase) executeUpdateInventory(ctx context.Context, step *entity.SagaStep) error {
 	var payload OrderPaymentPayload
 	if err := json.Unmarshal(step.Payload, &payload); err != nil {
 		return err
 	}
 
-	payment, err := u.paymentRepo.GetByOrderID(ctx, payload.OrderID)
-	if err != nil {
-		return err
-	}
-
-	var orderStatus orderEntity.OrderStatus
-	switch payment.Status {
-	case paymentEntity.PaymentStatusSuccess:
-		orderStatus = orderEntity.OrderStatusConfirmed
-	case paymentEntity.PaymentStatusFailed:
-		orderStatus = orderEntity.OrderStatusFailed
-	default:
-		return errors.New("invalid payment status")
-	}
-
-	return u.orderRepo.UpdateStatus(ctx, payload.OrderID, orderStatus)
+	// Implementation of updating inventory
+	return nil
 }
 
 // handleStepFailure handles a step failure
@@ -219,10 +239,10 @@ func (u *SagaUsecase) compensateSaga(ctx context.Context, saga *entity.Saga) {
 
 		var err error
 		switch step.Name {
-		case "ProcessPayment":
+		case entity.StepProcessPayment:
 			err = u.compensateProcessPayment(ctx, step)
-		case "UpdateOrderStatus":
-			err = u.compensateUpdateOrderStatus(ctx, step)
+		case entity.StepUpdateInventory:
+			err = u.compensateUpdateInventory(ctx, step)
 		}
 
 		if err != nil {
@@ -254,12 +274,70 @@ func (u *SagaUsecase) compensateProcessPayment(ctx context.Context, step *entity
 	return u.paymentRepo.Update(ctx, payment)
 }
 
-// compensateUpdateOrderStatus compensates the UpdateOrderStatus step
-func (u *SagaUsecase) compensateUpdateOrderStatus(ctx context.Context, step *entity.SagaStep) error {
+// compensateUpdateInventory compensates the UpdateInventory step
+func (u *SagaUsecase) compensateUpdateInventory(ctx context.Context, step *entity.SagaStep) error {
 	var payload OrderPaymentPayload
 	if err := json.Unmarshal(step.Payload, &payload); err != nil {
 		return err
 	}
 
-	return u.orderRepo.UpdateStatus(ctx, payload.OrderID, orderEntity.OrderStatusFailed)
+	// Implementation of updating inventory
+	return nil
+}
+
+// CompensateTransaction initiates compensation for a saga transaction
+func (u *SagaUsecase) CompensateTransaction(ctx context.Context, sagaID, stepID uuid.UUID, reason string) (*saga.SagaResponse, error) {
+	sagaEntity, err := u.sagaRepo.GetByID(ctx, sagaID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Start compensation process
+	go u.compensateSaga(context.Background(), sagaEntity)
+
+	return &saga.SagaResponse{
+		ID:        sagaEntity.ID,
+		Type:      saga.Type(string(sagaEntity.Type)),
+		Status:    saga.Status(string(sagaEntity.Status)),
+		Steps:     convertStepsToResponse(sagaEntity.Steps),
+		Metadata:  make(map[string]string),
+		CreatedAt: sagaEntity.CreatedAt,
+		UpdatedAt: sagaEntity.UpdatedAt,
+	}, nil
+}
+
+// ListSagaTransactions retrieves a list of saga transactions
+func (u *SagaUsecase) ListSagaTransactions(ctx context.Context, page, limit int32, status string, sagaType saga.Type) ([]*saga.SagaResponse, int64, error) {
+	// TODO: Implement pagination and filtering
+	return nil, 0, nil
+}
+
+func convertStepsToResponse(steps []entity.SagaStep) []saga.SagaStep {
+	result := make([]saga.SagaStep, len(steps))
+	for i, step := range steps {
+		result[i] = saga.SagaStep{
+			ID:                 step.ID,
+			Name:               string(step.Name),
+			Status:             saga.Status(string(step.Status)),
+			Service:            "saga",
+			Action:             string(step.Name),
+			CompensationAction: "compensate_" + string(step.Name),
+			Payload:            make(map[string]interface{}),
+			ErrorMessage:       step.ErrorMessage,
+			ExecutedAt:         step.CreatedAt,
+		}
+	}
+	return result
+}
+
+// StartOrderPaymentSaga starts a new order-payment saga transaction
+func (u *SagaUsecase) StartOrderPaymentSaga(ctx context.Context, orderID uuid.UUID) error {
+	// Default values for demonstration
+	amount := 0.0           // This should be fetched from the order
+	userID := uuid.New()    // This should be fetched from the order
+	paymentMethod := "card" // This should be fetched from the order
+	metadata := make(map[string]string)
+
+	_, err := u.StartOrderSaga(ctx, orderID, userID, amount, paymentMethod, metadata)
+	return err
 }

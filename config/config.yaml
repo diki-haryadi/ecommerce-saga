@@ -1,5 +1,7 @@
 app:
-  name: ecommerce-saga
+  name: "ppob-pg"
+  version: "1.0.0"
+  port: 8080
   environment: development
   debug: true
 
@@ -15,13 +17,20 @@ grpc:
 
 auth:
   jwt:
-    key: "your-secret-key"
-    expiry: "15m"
+    secret: "your-secret-key"
+    token_expiry: "1h"
+    refresh_expiry: "24h"
   jwk:
     rotation_period: "24h"
     key_size: 2048
 
 database:
+  host: "localhost"
+  port: 5432
+  name: "ppob_db"
+  user: "postgres"
+  password: "postgres"
+  sslmode: "disable"
   postgres:
     host: "localhost"
     port: "5432"
@@ -74,3 +83,14 @@ monitoring:
   logging:
     level: debug
     format: json 
+
+services:
+  order:
+    host: "localhost"
+    port: 50052
+  payment:
+    host: "localhost"
+    port: 50053
+  cart:
+    host: "localhost"
+    port: 50054 
