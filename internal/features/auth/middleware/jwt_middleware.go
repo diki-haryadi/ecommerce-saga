@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/auth/service"
 )
@@ -29,31 +28,15 @@ func JWTMiddleware(jwkService *service.JWKService) fiber.Handler {
 		}
 
 		// Validate the token
-		token, err := jwkService.ValidateToken(parts[1])
+		claims, err := jwkService.ValidateToken(parts[1])
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "Invalid token",
 			})
 		}
 
-		// Extract claims
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Invalid token claims",
-			})
-		}
-
-		// Add user ID to context
-		userID, ok := claims["sub"].(float64)
-		if !ok {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Invalid user ID in token",
-			})
-		}
-
 		// Store user ID in context
-		c.Locals("userID", uint(userID))
+		c.Locals("userID", claims.UserID)
 
 		return c.Next()
 	}

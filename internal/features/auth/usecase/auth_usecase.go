@@ -9,6 +9,7 @@ import (
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/auth/domain"
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/auth/domain/entity"
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/auth/repository"
+	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/jwt"
 )
 
 var (
@@ -18,20 +19,27 @@ var (
 	ErrUserNotFound       = errors.New("user not found")
 )
 
+// Claims represents the JWT claims
+type Claims struct {
+	UserID string `json:"user_id"`
+}
+
 // AuthUsecase defines the interface for authentication use cases
 type AuthUsecase interface {
 	Register(email, password string) error
 	Login(email, password string) (*TokenPair, error)
 	RefreshToken(refreshToken string) (*TokenPair, error)
 	UpdatePassword(userID uuid.UUID, currentPassword, newPassword string) error
-	GetJWKS() ([]byte, error)
+	GetJWKS() ([]jwt.JWK, error)
+	ValidateToken(token string) (*jwt.Claims, error)
 }
 
 // JWKService defines the interface for JWT operations
 type JWKService interface {
 	GenerateAccessToken(userID uuid.UUID) (string, error)
 	GenerateRefreshToken() (string, error)
-	GetJWKS() ([]byte, error)
+	GetJWKS() ([]jwt.JWK, error)
+	ValidateToken(token string) (*jwt.Claims, error)
 }
 
 type authUsecase struct {
@@ -176,6 +184,15 @@ func (u *authUsecase) UpdatePassword(userID uuid.UUID, currentPassword, newPassw
 }
 
 // GetJWKS returns the public JWK set
-func (u *authUsecase) GetJWKS() ([]byte, error) {
+func (u *authUsecase) GetJWKS() ([]jwt.JWK, error) {
 	return u.jwkService.GetJWKS()
+}
+
+// ValidateToken validates a JWT token and returns its claims
+func (u *authUsecase) ValidateToken(token string) (*jwt.Claims, error) {
+	claims, err := u.jwkService.ValidateToken(token)
+	if err != nil {
+		return nil, ErrInvalidToken
+	}
+	return claims, nil
 }

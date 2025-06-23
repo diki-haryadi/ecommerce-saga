@@ -16,7 +16,7 @@ import (
 
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/saga/domain/entity"
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/saga/repository"
-	"github.com/diki-haryadi/ecommerce-saga/internal/features/saga/usecase"
+	saga "github.com/diki-haryadi/ecommerce-saga/internal/features/saga/usecase"
 	"github.com/diki-haryadi/ecommerce-saga/internal/shared/messaging"
 )
 
@@ -28,7 +28,7 @@ type StepMessage struct {
 
 type Worker struct {
 	messageBroker    messaging.MessageBroker
-	sagaOrchestrator *usecase.SagaOrchestrator
+	sagaOrchestrator *saga.SagaOrchestrator
 	db               *gorm.DB
 }
 
@@ -297,7 +297,7 @@ func initWorker() (*Worker, error) {
 
 	// Initialize saga orchestrator
 	sagaRepo := repository.NewPostgresSagaRepository(db)
-	sagaOrchestrator := usecase.NewSagaOrchestrator(
+	sagaOrchestrator := saga.NewSagaOrchestrator(
 		sagaRepo,
 		messageBroker,
 		5*time.Minute, // Step timeout

@@ -1,4 +1,4 @@
-.PHONY: build test clean run-api run-worker run-orchestrator migrate-up migrate-down lint docker-build docker-up
+.PHONY: build test clean run-api run-worker run-orchestrator migrate-up migrate-down lint docker-build docker-up proto proto-clean proto-all run-grpc
 
 # Build commands
 build:
@@ -58,5 +58,73 @@ deps:
 # Generate swagger docs
 swagger:
 	swag init -g cmd/api/main.go -o api/docs
+
+# Protobuf commands
+PROTO_DIR=proto
+GO_OUT_DIR=internal/features
+
+.PHONY: proto
+proto: proto-auth proto-cart proto-order proto-payment proto-saga
+
+.PHONY: proto-auth
+proto-auth:
+	@echo "Generating auth proto..."
+	protoc --go_out=. \
+		--go_opt=module=github.com/diki-haryadi/ecommerce-saga \
+		--go-grpc_out=. \
+		--go-grpc_opt=module=github.com/diki-haryadi/ecommerce-saga \
+		$(PROTO_DIR)/auth/auth.proto
+
+.PHONY: proto-cart
+proto-cart:
+	@echo "Generating cart proto..."
+	protoc --go_out=. \
+		--go_opt=module=github.com/diki-haryadi/ecommerce-saga \
+		--go-grpc_out=. \
+		--go-grpc_opt=module=github.com/diki-haryadi/ecommerce-saga \
+		$(PROTO_DIR)/cart/cart.proto
+
+.PHONY: proto-order
+proto-order:
+	@echo "Generating order proto..."
+	protoc --go_out=. \
+		--go_opt=module=github.com/diki-haryadi/ecommerce-saga \
+		--go-grpc_out=. \
+		--go-grpc_opt=module=github.com/diki-haryadi/ecommerce-saga \
+		$(PROTO_DIR)/order/order.proto
+
+.PHONY: proto-payment
+proto-payment:
+	@echo "Generating payment proto..."
+	protoc --go_out=. \
+		--go_opt=module=github.com/diki-haryadi/ecommerce-saga \
+		--go-grpc_out=. \
+		--go-grpc_opt=module=github.com/diki-haryadi/ecommerce-saga \
+		$(PROTO_DIR)/payment/payment.proto
+
+.PHONY: proto-saga
+proto-saga:
+	@echo "Generating saga proto..."
+	protoc --go_out=. \
+		--go_opt=module=github.com/diki-haryadi/ecommerce-saga \
+		--go-grpc_out=. \
+		--go-grpc_opt=module=github.com/diki-haryadi/ecommerce-saga \
+		$(PROTO_DIR)/saga/saga.proto
+
+proto-clean: ## Clean generated protobuf code
+	@echo "Cleaning generated protobuf code..."
+	@find . -name "*.pb.go" -type f -delete
+
+proto-all: proto-clean proto ## Clean and regenerate all protobuf code
+
+# New target
+run-grpc: ## Run the gRPC server
+	@echo "Starting gRPC server..."
+	@go run cmd/grpc/main.go
+
+.PHONY: clean-proto
+clean-proto:
+	@echo "Cleaning generated proto files..."
+	rm -rf $(GO_OUT_DIR)/*/delivery/grpc/proto
 
 .DEFAULT_GOAL := build 

@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package auth;
+
+option go_package = "github.com/diki-haryadi/ecommerce-saga/internal/features/auth/delivery/grpc/proto";
+
+import "google/protobuf/timestamp.proto";
+
+// Auth service definition
+service AuthService {
+  // Register creates a new user account
+  rpc Register(RegisterRequest) returns (RegisterResponse) {}
+  
+  // Login authenticates a user and returns tokens
+  rpc Login(LoginRequest) returns (LoginResponse) {}
+  
+  // RefreshToken refreshes an access token using a refresh token
+  rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse) {}
+  
+  // UpdatePassword updates user's password
+  rpc UpdatePassword(UpdatePasswordRequest) returns (UpdatePasswordResponse) {}
+  
+  // GetJWKS returns the JSON Web Key Set
+  rpc GetJWKS(GetJWKSRequest) returns (GetJWKSResponse) {}
+}
+
+// Register messages
+message RegisterRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message RegisterResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Login messages
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+  string token_type = 3;
+  int32 expires_in = 4;
+}
+
+// RefreshToken messages
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+message RefreshTokenResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+  string token_type = 3;
+  int32 expires_in = 4;
+}
+
+// UpdatePassword messages
+message UpdatePasswordRequest {
+  string current_password = 1;
+  string new_password = 2;
+}
+
+message UpdatePasswordResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// JWKS messages
+message GetJWKSRequest {}
+
+message JWK {
+  string kid = 1;
+  string kty = 2;
+  string alg = 3;
+  string use = 4;
+  string n = 5;
+  string e = 6;
+}
+
+message GetJWKSResponse {
+  repeated JWK keys = 1;
+} 

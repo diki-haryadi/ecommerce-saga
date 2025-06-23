@@ -13,7 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/saga/repository"
-	"github.com/diki-haryadi/ecommerce-saga/internal/features/saga/usecase"
+	saga "github.com/diki-haryadi/ecommerce-saga/internal/features/saga/usecase"
 	"github.com/diki-haryadi/ecommerce-saga/internal/shared/messaging"
 )
 
@@ -38,7 +38,7 @@ func main() {
 	}
 
 	// Create saga orchestrator
-	orchestrator := usecase.NewSagaOrchestrator(
+	orchestrator := saga.NewSagaOrchestrator(
 		sagaRepo,
 		messageBroker,
 		5*time.Minute, // Step timeout

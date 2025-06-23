@@ -4,10 +4,14 @@ app:
   debug: true
 
 server:
-  host: "0.0.0.0"
+  host: "localhost"
   port: "8080"
   read_timeout: 10s
   write_timeout: 10s
+
+grpc:
+  host: "localhost"
+  port: 50051
 
 auth:
   jwt:

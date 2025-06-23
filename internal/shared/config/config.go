@@ -9,6 +9,7 @@ import (
 
 type Config struct {
 	Server   ServerConfig   `mapstructure:"server"`
+	GRPC     GRPCConfig     `mapstructure:"grpc"`
 	Database DatabaseConfig `mapstructure:"database"`
 	Redis    RedisConfig    `mapstructure:"redis"`
 	Auth     AuthConfig     `mapstructure:"auth"`
@@ -82,6 +83,11 @@ type NSQConfig struct {
 type NATSConfig struct {
 	URL     string `mapstructure:"url"`
 	Cluster string `mapstructure:"cluster"`
+}
+
+type GRPCConfig struct {
+	Host string `mapstructure:"host"`
+	Port int    `mapstructure:"port"`
 }
 
 // LoadConfig loads configuration from file and environment variables

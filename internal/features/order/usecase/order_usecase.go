@@ -7,9 +7,8 @@ import (
 	"github.com/google/uuid"
 
 	cartRepo "github.com/diki-haryadi/ecommerce-saga/internal/features/cart/repository"
+	"github.com/diki-haryadi/ecommerce-saga/internal/features/order"
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/order/domain/entity"
-	"github.com/diki-haryadi/ecommerce-saga/internal/features/order/dto/request"
-	"github.com/diki-haryadi/ecommerce-saga/internal/features/order/dto/response"
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/order/repository"
 )
 
@@ -20,6 +19,10 @@ var (
 	ErrInvalidStatus     = errors.New("invalid order status")
 	ErrStatusTransition  = errors.New("invalid status transition")
 	ErrOrderAlreadyFinal = errors.New("order is already in final state")
+
+	ErrNotFound  = errors.New("order not found")
+	ErrCancelled = errors.New("order is already cancelled")
+	ErrCompleted = errors.New("order is already completed")
 )
 
 type OrderUsecase struct {
@@ -35,22 +38,22 @@ func NewOrderUsecase(orderRepo repository.OrderRepository, cartRepo cartRepo.Car
 }
 
 // CreateOrder creates a new order from a cart
-func (u *OrderUsecase) CreateOrder(ctx context.Context, userID uuid.UUID, req *request.CreateOrderRequest) (*response.OrderResponse, error) {
+func (u *OrderUsecase) CreateOrder(ctx context.Context, userID, cartID uuid.UUID, paymentMethod, shippingAddress string) (*order.OrderResponse, error) {
 	// Get cart
-	cart, err := u.cartRepo.GetByID(ctx, req.CartID)
+	cart, err := u.cartRepo.GetByID(ctx, cartID)
 	if err != nil {
 		return nil, err
 	}
 	if cart == nil {
-		return nil, ErrCartNotFound
+		return nil, order.ErrCartNotFound
 	}
 
 	// Validate cart
 	if len(cart.Items) == 0 {
-		return nil, ErrCartEmpty
+		return nil, order.ErrCartEmpty
 	}
 	if cart.UserID != userID {
-		return nil, ErrCartNotFound
+		return nil, order.ErrCartNotFound
 	}
 
 	// Create order items
@@ -66,10 +69,10 @@ func (u *OrderUsecase) CreateOrder(ctx context.Context, userID uuid.UUID, req *r
 	}
 
 	// Create order
-	order := entity.NewOrder(userID, items)
+	newOrder := entity.NewOrder(userID, items)
 
 	// Save order
-	if err := u.orderRepo.Create(ctx, order); err != nil {
+	if err := u.orderRepo.Create(ctx, newOrder); err != nil {
 		return nil, err
 	}
 
@@ -78,60 +81,106 @@ func (u *OrderUsecase) CreateOrder(ctx context.Context, userID uuid.UUID, req *r
 		return nil, err
 	}
 
-	return response.NewOrderResponse(order), nil
+	// Convert to response
+	return &order.OrderResponse{
+		ID:          newOrder.ID,
+		UserID:      newOrder.UserID,
+		Items:       u.convertItems(items),
+		TotalAmount: newOrder.TotalAmount,
+		Status:      order.Status(newOrder.Status),
+		CreatedAt:   newOrder.CreatedAt,
+		UpdatedAt:   newOrder.UpdatedAt,
+	}, nil
+}
+
+func (u *OrderUsecase) convertItems(items []entity.OrderItem) []order.OrderItem {
+	result := make([]order.OrderItem, len(items))
+	for i, item := range items {
+		result[i] = order.OrderItem{
+			ID:        item.ID,
+			ProductID: item.ProductID,
+			Name:      item.Name,
+			Price:     item.Price,
+			Quantity:  item.Quantity,
+			Subtotal:  item.Price * float64(item.Quantity),
+		}
+	}
+	return result
 }
 
 // GetOrder retrieves an order by ID
-func (u *OrderUsecase) GetOrder(ctx context.Context, userID, orderID uuid.UUID) (*response.OrderResponse, error) {
-	order, err := u.orderRepo.GetByID(ctx, orderID)
+func (u *OrderUsecase) GetOrder(ctx context.Context, userID, orderID uuid.UUID) (*order.OrderResponse, error) {
+	orderEntity, err := u.orderRepo.GetByID(ctx, orderID)
 	if err != nil {
 		return nil, err
 	}
-	if order == nil || order.UserID != userID {
-		return nil, ErrOrderNotFound
+	if orderEntity == nil || orderEntity.UserID != userID {
+		return nil, order.ErrNotFound
 	}
 
-	return response.NewOrderResponse(order), nil
+	return &order.OrderResponse{
+		ID:          orderEntity.ID,
+		UserID:      orderEntity.UserID,
+		Items:       u.convertItems(orderEntity.Items),
+		TotalAmount: orderEntity.TotalAmount,
+		Status:      order.Status(orderEntity.Status),
+		CreatedAt:   orderEntity.CreatedAt,
+		UpdatedAt:   orderEntity.UpdatedAt,
+	}, nil
 }
 
 // ListOrders retrieves a paginated list of orders for a user
-func (u *OrderUsecase) ListOrders(ctx context.Context, userID uuid.UUID, req *request.ListOrdersRequest) (*response.OrderListResponse, error) {
+func (u *OrderUsecase) ListOrders(ctx context.Context, userID uuid.UUID, page, limit int32, status string) ([]*order.OrderResponse, int64, error) {
 	// Get total count
 	totalRows, err := u.orderRepo.CountByUserID(ctx, userID)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	// Calculate pagination
-	offset := (req.Page - 1) * req.PageSize
+	offset := (page - 1) * limit
 
 	// Get orders
-	orders, err := u.orderRepo.GetByUserID(ctx, userID, req.PageSize, offset)
+	orders, err := u.orderRepo.GetByUserID(ctx, userID, int(limit), int(offset))
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return response.NewOrderListResponse(orders, req.Page, req.PageSize, totalRows), nil
+	// Convert to response
+	result := make([]*order.OrderResponse, len(orders))
+	for i, o := range orders {
+		result[i] = &order.OrderResponse{
+			ID:          o.ID,
+			UserID:      o.UserID,
+			Items:       u.convertItems(o.Items),
+			TotalAmount: o.TotalAmount,
+			Status:      order.Status(o.Status),
+			CreatedAt:   o.CreatedAt,
+			UpdatedAt:   o.UpdatedAt,
+		}
+	}
+
+	return result, totalRows, nil
 }
 
 // UpdateOrderStatus updates the status of an order
-func (u *OrderUsecase) UpdateOrderStatus(ctx context.Context, userID, orderID uuid.UUID, req *request.UpdateOrderStatusRequest) (*response.OrderResponse, error) {
+func (u *OrderUsecase) UpdateOrderStatus(ctx context.Context, orderID uuid.UUID, status order.Status) (*order.OrderResponse, error) {
 	// Get order
-	order, err := u.orderRepo.GetByID(ctx, orderID)
+	orderEntity, err := u.orderRepo.GetByID(ctx, orderID)
 	if err != nil {
 		return nil, err
 	}
-	if order == nil || order.UserID != userID {
-		return nil, ErrOrderNotFound
+	if orderEntity == nil {
+		return nil, order.ErrNotFound
 	}
 
 	// Validate status transition
-	newStatus := entity.OrderStatus(req.Status)
-	if !order.CanTransitionTo(newStatus) {
-		if order.IsFinal() {
-			return nil, ErrOrderAlreadyFinal
+	newStatus := entity.OrderStatus(status)
+	if !orderEntity.CanTransitionTo(newStatus) {
+		if orderEntity.IsFinal() {
+			return nil, order.ErrOrderAlreadyFinal
 		}
-		return nil, ErrStatusTransition
+		return nil, order.ErrStatusTransition
 	}
 
 	// Update status
@@ -140,10 +189,18 @@ func (u *OrderUsecase) UpdateOrderStatus(ctx context.Context, userID, orderID uu
 	}
 
 	// Get updated order
-	order, err = u.orderRepo.GetByID(ctx, orderID)
+	orderEntity, err = u.orderRepo.GetByID(ctx, orderID)
 	if err != nil {
 		return nil, err
 	}
 
-	return response.NewOrderResponse(order), nil
+	return &order.OrderResponse{
+		ID:          orderEntity.ID,
+		UserID:      orderEntity.UserID,
+		Items:       u.convertItems(orderEntity.Items),
+		TotalAmount: orderEntity.TotalAmount,
+		Status:      order.Status(orderEntity.Status),
+		CreatedAt:   orderEntity.CreatedAt,
+		UpdatedAt:   orderEntity.UpdatedAt,
+	}, nil
 }

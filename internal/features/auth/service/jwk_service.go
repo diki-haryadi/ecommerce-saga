@@ -2,14 +2,15 @@ package service
 
 import (
 	"crypto/rsa"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
+	jwtgo "github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/lestrrat-go/jwx/jwk"
+
+	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/jwt"
 )
 
 type JWKService struct {
@@ -73,44 +74,40 @@ func (s *JWKService) startKeyRotation() {
 	}
 }
 
-// GetJWKS returns the public JWK set
-func (s *JWKService) GetJWKS() ([]byte, error) {
+// GetJWKS returns the JSON Web Key Set
+func (s *JWKService) GetJWKS() ([]jwt.JWK, error) {
 	s.keyMutex.RLock()
 	defer s.keyMutex.RUnlock()
 
-	// Create key set
-	keySet := make([]interface{}, 0, 2)
+	var keys []jwt.JWK
 
 	// Add current key
 	if s.currentKey != nil {
-		key, err := jwk.New(s.currentKey.Public())
-		if err != nil {
-			return nil, fmt.Errorf("failed to create JWK from current key: %w", err)
+		currentJWK := jwt.JWK{
+			KeyID:     s.currentKeyID,
+			KeyType:   "RSA",
+			Algorithm: "RS256",
+			Use:       "sig",
+			N:         fmt.Sprintf("%x", s.currentKey.PublicKey.N),
+			E:         fmt.Sprintf("%x", s.currentKey.PublicKey.E),
 		}
-		if err := key.Set(jwk.KeyIDKey, s.currentKeyID); err != nil {
-			return nil, err
-		}
-		keySet = append(keySet, key)
+		keys = append(keys, currentJWK)
 	}
 
 	// Add previous key if exists
 	if s.previousKey != nil {
-		key, err := jwk.New(s.previousKey.Public())
-		if err != nil {
-			return nil, fmt.Errorf("failed to create JWK from previous key: %w", err)
+		previousJWK := jwt.JWK{
+			KeyID:     s.previousKeyID,
+			KeyType:   "RSA",
+			Algorithm: "RS256",
+			Use:       "sig",
+			N:         fmt.Sprintf("%x", s.previousKey.PublicKey.N),
+			E:         fmt.Sprintf("%x", s.previousKey.PublicKey.E),
 		}
-		if err := key.Set(jwk.KeyIDKey, s.previousKeyID); err != nil {
-			return nil, err
-		}
-		keySet = append(keySet, key)
+		keys = append(keys, previousJWK)
 	}
 
-	// Marshal to JSON
-	return json.Marshal(struct {
-		Keys []interface{} `json:"keys"`
-	}{
-		Keys: keySet,
-	})
+	return keys, nil
 }
 
 // GenerateAccessToken generates a new JWT access token
@@ -118,14 +115,14 @@ func (s *JWKService) GenerateAccessToken(userID uuid.UUID) (string, error) {
 	s.keyMutex.RLock()
 	defer s.keyMutex.RUnlock()
 
-	claims := jwt.MapClaims{
+	claims := jwtgo.MapClaims{
 		"sub": userID.String(),
 		"exp": time.Now().Add(15 * time.Minute).Unix(),
 		"iat": time.Now().Unix(),
 		"kid": s.currentKeyID,
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	token := jwtgo.NewWithClaims(jwtgo.SigningMethodRS256, claims)
 	token.Header["kid"] = s.currentKeyID
 
 	return token.SignedString(s.currentKey)
@@ -137,12 +134,12 @@ func (s *JWKService) GenerateRefreshToken() (string, error) {
 }
 
 // ValidateToken validates a JWT token
-func (s *JWKService) ValidateToken(tokenString string) (*jwt.Token, error) {
+func (s *JWKService) ValidateToken(tokenString string) (*jwt.Claims, error) {
 	s.keyMutex.RLock()
 	defer s.keyMutex.RUnlock()
 
-	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+	token, err := jwtgo.Parse(tokenString, func(token *jwtgo.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwtgo.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 
@@ -162,4 +159,20 @@ func (s *JWKService) ValidateToken(tokenString string) (*jwt.Token, error) {
 
 		return nil, fmt.Errorf("key not found")
 	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if claims, ok := token.Claims.(jwtgo.MapClaims); ok && token.Valid {
+		return &jwt.Claims{
+			UserID: claims["sub"].(string),
+			RegisteredClaims: jwtgo.RegisteredClaims{
+				ExpiresAt: jwtgo.NewNumericDate(time.Unix(int64(claims["exp"].(float64)), 0)),
+				IssuedAt:  jwtgo.NewNumericDate(time.Unix(int64(claims["iat"].(float64)), 0)),
+			},
+		}, nil
+	}
+
+	return nil, fmt.Errorf("invalid token")
 }

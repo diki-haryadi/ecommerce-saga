@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package order;
+
+option go_package = "github.com/diki-haryadi/ecommerce-saga/internal/features/order/delivery/grpc/proto";
+
+import "google/protobuf/timestamp.proto";
+
+service OrderService {
+  rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse);
+  rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);
+  rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse);
+  rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
+  rpc UpdateOrderStatus(UpdateOrderStatusRequest) returns (UpdateOrderStatusResponse);
+}
+
+message OrderItem {
+  string id = 1;
+  string product_id = 2;
+  string name = 3;
+  double price = 4;
+  int32 quantity = 5;
+  double subtotal = 6;
+}
+
+message Order {
+  string id = 1;
+  string user_id = 2;
+  repeated OrderItem items = 3;
+  double total_amount = 4;
+  string status = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message CreateOrderRequest {
+  string user_id = 1;
+  string cart_id = 2;
+  string payment_method = 3;
+  string shipping_address = 4;
+}
+
+message CreateOrderResponse {
+  bool success = 1;
+  string message = 2;
+  Order order = 3;
+}
+
+message GetOrderRequest {
+  string user_id = 1;
+  string order_id = 2;
+}
+
+message GetOrderResponse {
+  Order order = 1;
+}
+
+message ListOrdersRequest {
+  string user_id = 1;
+  int32 page = 2;
+  int32 limit = 3;
+  string status = 4;
+}
+
+message ListOrdersResponse {
+  repeated Order orders = 1;
+  int64 total = 2;
+  int32 page = 3;
+  int32 limit = 4;
+}
+
+message CancelOrderRequest {
+  string user_id = 1;
+  string order_id = 2;
+  string reason = 3;
+}
+
+message CancelOrderResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message UpdateOrderStatusRequest {
+  string order_id = 1;
+  string status = 2;
+}
+
+message UpdateOrderStatusResponse {
+  bool success = 1;
+  string message = 2;
+  Order order = 3;
+} 

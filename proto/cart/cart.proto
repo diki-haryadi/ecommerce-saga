@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package cart;
+
+option go_package = "github.com/diki-haryadi/ecommerce-saga/internal/features/cart/delivery/grpc/proto";
+
+import "google/protobuf/timestamp.proto";
+
+// CartService provides cart management functionality
+service CartService {
+  // AddItem adds an item to the cart
+  rpc AddItem(AddItemRequest) returns (AddItemResponse) {}
+  
+  // RemoveItem removes an item from the cart
+  rpc RemoveItem(RemoveItemRequest) returns (RemoveItemResponse) {}
+  
+  // UpdateQuantity updates the quantity of an item in the cart
+  rpc UpdateQuantity(UpdateQuantityRequest) returns (UpdateQuantityResponse) {}
+  
+  // GetCart retrieves the current cart
+  rpc GetCart(GetCartRequest) returns (GetCartResponse) {}
+  
+  // ClearCart removes all items from the cart
+  rpc ClearCart(ClearCartRequest) returns (ClearCartResponse) {}
+}
+
+// CartItem represents an item in the cart
+message CartItem {
+  string id = 1;
+  string product_id = 2;
+  string name = 3;
+  double price = 4;
+  int32 quantity = 5;
+  google.protobuf.Timestamp added_at = 6;
+}
+
+// AddItemRequest represents a request to add an item to the cart
+message AddItemRequest {
+  string product_id = 1;
+  int32 quantity = 2;
+}
+
+// AddItemResponse represents the response after adding an item
+message AddItemResponse {
+  bool success = 1;
+  string message = 2;
+  CartItem item = 3;
+}
+
+// RemoveItemRequest represents a request to remove an item from the cart
+message RemoveItemRequest {
+  string cart_item_id = 1;
+}
+
+// RemoveItemResponse represents the response after removing an item
+message RemoveItemResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// UpdateQuantityRequest represents a request to update item quantity
+message UpdateQuantityRequest {
+  string cart_item_id = 1;
+  int32 quantity = 2;
+}
+
+// UpdateQuantityResponse represents the response after updating quantity
+message UpdateQuantityResponse {
+  bool success = 1;
+  string message = 2;
+  CartItem item = 3;
+}
+
+// GetCartRequest represents a request to get the current cart
+message GetCartRequest {}
+
+// GetCartResponse represents the response containing cart details
+message GetCartResponse {
+  repeated CartItem items = 1;
+  double total_amount = 2;
+  int32 total_items = 3;
+}
+
+// ClearCartRequest represents a request to clear the cart
+message ClearCartRequest {}
+
+// ClearCartResponse represents the response after clearing the cart
+message ClearCartResponse {
+  bool success = 1;
+  string message = 2;
+} 

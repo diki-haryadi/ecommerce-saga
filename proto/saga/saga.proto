@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+package saga;
+
+option go_package = "github.com/diki-haryadi/ecommerce-saga/internal/features/saga/delivery/grpc/proto";
+
+import "google/protobuf/timestamp.proto";
+
+// SagaService defines the gRPC service for saga orchestration
+service SagaService {
+  // StartOrderSaga starts a new order saga transaction
+  rpc StartOrderSaga(StartOrderSagaRequest) returns (StartOrderSagaResponse);
+  
+  // GetSagaStatus retrieves the status of a saga transaction
+  rpc GetSagaStatus(GetSagaStatusRequest) returns (GetSagaStatusResponse);
+  
+  // CompensateTransaction initiates compensation for a saga transaction
+  rpc CompensateTransaction(CompensateTransactionRequest) returns (CompensateTransactionResponse);
+  
+  // ListSagaTransactions retrieves a list of saga transactions
+  rpc ListSagaTransactions(ListSagaTransactionsRequest) returns (ListSagaTransactionsResponse);
+}
+
+// SagaTransaction represents a saga transaction
+message SagaTransaction {
+  string id = 1;
+  string type = 2;
+  string status = 3;
+  repeated SagaStep steps = 4;
+  map<string, string> metadata = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+// SagaStep represents a step in the saga transaction
+message SagaStep {
+  string id = 1;
+  string name = 2;
+  string status = 3;
+  string service = 4;
+  string action = 5;
+  string compensation_action = 6;
+  map<string, string> payload = 7;
+  string error_message = 8;
+  google.protobuf.Timestamp executed_at = 9;
+}
+
+// StartOrderSagaRequest represents the request to start an order saga
+message StartOrderSagaRequest {
+  string order_id = 1;
+  string user_id = 2;
+  double amount = 3;
+  string payment_method = 4;
+  map<string, string> metadata = 5;
+}
+
+// StartOrderSagaResponse represents the response after starting an order saga
+message StartOrderSagaResponse {
+  bool success = 1;
+  string message = 2;
+  SagaTransaction transaction = 3;
+}
+
+// GetSagaStatusRequest represents the request to get a saga's status
+message GetSagaStatusRequest {
+  string saga_id = 1;
+}
+
+// GetSagaStatusResponse represents the response containing saga status
+message GetSagaStatusResponse {
+  SagaTransaction transaction = 1;
+}
+
+// CompensateTransactionRequest represents the request to compensate a saga transaction
+message CompensateTransactionRequest {
+  string saga_id = 1;
+  string step_id = 2;
+  string reason = 3;
+}
+
+// CompensateTransactionResponse represents the response after compensating a transaction
+message CompensateTransactionResponse {
+  bool success = 1;
+  string message = 2;
+  SagaTransaction transaction = 3;
+}
+
+// ListSagaTransactionsRequest represents the request to list saga transactions
+message ListSagaTransactionsRequest {
+  int32 page = 1;
+  int32 limit = 2;
+  string status = 3;
+  string type = 4;
+}
+
+// ListSagaTransactionsResponse represents the response containing a list of transactions
+message ListSagaTransactionsResponse {
+  repeated SagaTransaction transactions = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 limit = 4;
+} 

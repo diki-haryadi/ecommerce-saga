@@ -14,13 +14,16 @@ import (
 )
 
 var (
-	ErrPaymentNotFound     = errors.New("payment not found")
-	ErrOrderNotFound       = errors.New("order not found")
+	ErrPaymentNotFound  = errors.New("payment not found")
+	ErrOrderNotFound    = errors.New("order not found")
+	ErrStatusTransition = errors.New("invalid status transition")
+	ErrPaymentCompleted = errors.New("payment is already completed")
+
+	ErrNotFound            = errors.New("payment not found")
 	ErrInvalidStatus       = errors.New("invalid payment status")
-	ErrStatusTransition    = errors.New("invalid status transition")
-	ErrPaymentCompleted    = errors.New("payment is already completed")
-	ErrInvalidProvider     = errors.New("invalid payment provider")
+	ErrCompleted           = errors.New("payment is already completed")
 	ErrProviderUnavailable = errors.New("payment provider is unavailable")
+	ErrInvalidProvider     = errors.New("invalid payment provider")
 )
 
 // PaymentProvider defines the interface for payment providers

@@ -8,7 +8,7 @@ require (
 	github.com/Shopify/sarama v1.38.1
 	github.com/go-playground/validator/v10 v10.26.0
 	github.com/gofiber/fiber/v2 v2.52.0
-	github.com/golang-jwt/jwt/v5 v5.2.0
+	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/golang-migrate/migrate/v4 v4.18.3
 	github.com/google/uuid v1.6.0
 	github.com/lestrrat-go/jwx v1.2.28
@@ -23,6 +23,8 @@ require (
 	go.mongodb.org/mongo-driver v1.17.4
 	go.uber.org/zap v1.21.0
 	golang.org/x/crypto v0.36.0
+	google.golang.org/grpc v1.73.0
+	google.golang.org/protobuf v1.36.6
 	gorm.io/driver/postgres v1.5.6
 	gorm.io/gorm v1.25.7
 )
@@ -108,7 +110,7 @@ require (
 	golang.org/x/sync v0.12.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
-	google.golang.org/protobuf v1.36.5 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250324211829-b45e905df463 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

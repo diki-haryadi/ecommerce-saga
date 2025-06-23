@@ -17,6 +17,9 @@ var (
 	ErrInvalidStep      = errors.New("invalid saga step")
 	ErrStepTimeout      = errors.New("step timeout")
 	ErrSagaAlreadyExist = errors.New("saga already exists")
+	ErrNotFound         = errors.New("saga not found")
+	ErrAlreadyExist     = errors.New("saga already exists")
+	ErrInvalidStatus    = errors.New("invalid status")
 )
 
 type SagaRepository interface {

@@ -1,0 +1,117 @@
+syntax = "proto3";
+
+package payment;
+
+option go_package = "github.com/diki-haryadi/ecommerce-saga/internal/features/payment/delivery/grpc/proto";
+
+import "google/protobuf/timestamp.proto";
+
+// PaymentService provides payment processing functionality
+service PaymentService {
+  // CreatePayment creates a new payment for an order
+  rpc CreatePayment(CreatePaymentRequest) returns (CreatePaymentResponse) {}
+  
+  // GetPayment retrieves payment details
+  rpc GetPayment(GetPaymentRequest) returns (GetPaymentResponse) {}
+  
+  // ListPayments retrieves a list of payments
+  rpc ListPayments(ListPaymentsRequest) returns (ListPaymentsResponse) {}
+  
+  // ProcessPayment processes a payment
+  rpc ProcessPayment(ProcessPaymentRequest) returns (ProcessPaymentResponse) {}
+  
+  // RefundPayment processes a refund
+  rpc RefundPayment(RefundPaymentRequest) returns (RefundPaymentResponse) {}
+}
+
+// Payment represents a payment in the system
+message Payment {
+  string id = 1;
+  string order_id = 2;
+  string user_id = 3;
+  double amount = 4;
+  string currency = 5;
+  string status = 6;
+  string payment_method = 7;
+  string transaction_id = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+// CreatePaymentRequest represents a request to create a new payment
+message CreatePaymentRequest {
+  string order_id = 1;
+  double amount = 2;
+  string currency = 3;
+  string payment_method = 4;
+}
+
+// CreatePaymentResponse represents the response after creating a payment
+message CreatePaymentResponse {
+  bool success = 1;
+  string message = 2;
+  Payment payment = 3;
+}
+
+// GetPaymentRequest represents a request to get payment details
+message GetPaymentRequest {
+  string payment_id = 1;
+}
+
+// GetPaymentResponse represents the response containing payment details
+message GetPaymentResponse {
+  Payment payment = 1;
+}
+
+// ListPaymentsRequest represents a request to list payments
+message ListPaymentsRequest {
+  int32 page = 1;
+  int32 limit = 2;
+  string status = 3;
+}
+
+// ListPaymentsResponse represents the response containing a list of payments
+message ListPaymentsResponse {
+  repeated Payment payments = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 limit = 4;
+}
+
+// ProcessPaymentRequest represents a request to process a payment
+message ProcessPaymentRequest {
+  string payment_id = 1;
+  PaymentDetails payment_details = 2;
+}
+
+// PaymentDetails contains payment processing details
+message PaymentDetails {
+  string card_number = 1;
+  string expiry_month = 2;
+  string expiry_year = 3;
+  string cvv = 4;
+  string holder_name = 5;
+}
+
+// ProcessPaymentResponse represents the response after processing a payment
+message ProcessPaymentResponse {
+  bool success = 1;
+  string message = 2;
+  string transaction_id = 3;
+  Payment payment = 4;
+}
+
+// RefundPaymentRequest represents a request to refund a payment
+message RefundPaymentRequest {
+  string payment_id = 1;
+  double amount = 2;
+  string reason = 3;
+}
+
+// RefundPaymentResponse represents the response after processing a refund
+message RefundPaymentResponse {
+  bool success = 1;
+  string message = 2;
+  string refund_id = 3;
+  Payment payment = 4;
+} 

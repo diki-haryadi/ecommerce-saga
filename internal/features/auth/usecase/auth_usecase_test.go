@@ -10,6 +10,7 @@ import (
 
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/auth/domain"
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/auth/domain/entity"
+	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/jwt"
 )
 
 // MockUserRepository is a mock implementation of UserRepository
@@ -76,9 +77,20 @@ func (m *MockJWKService) GenerateRefreshToken() (string, error) {
 	return args.String(0), args.Error(1)
 }
 
-func (m *MockJWKService) GetJWKS() ([]byte, error) {
+func (m *MockJWKService) GetJWKS() ([]jwt.JWK, error) {
 	args := m.Called()
-	return args.Get(0).([]byte), args.Error(1)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]jwt.JWK), args.Error(1)
+}
+
+func (m *MockJWKService) ValidateToken(token string) (*jwt.Claims, error) {
+	args := m.Called(token)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*jwt.Claims), args.Error(1)
 }
 
 func TestAuthUsecase_Register(t *testing.T) {

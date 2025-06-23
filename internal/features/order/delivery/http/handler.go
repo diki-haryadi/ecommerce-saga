@@ -4,18 +4,18 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
+	"github.com/diki-haryadi/ecommerce-saga/internal/features/order"
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/order/dto/request"
-	"github.com/diki-haryadi/ecommerce-saga/internal/features/order/usecase"
 	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/http/errors"
 	httpresponse "github.com/diki-haryadi/ecommerce-saga/internal/pkg/http/response"
 )
 
 type OrderHandler struct {
-	orderUsecase *usecase.OrderUsecase
+	orderUsecase order.Usecase
 	errorHandler errors.ErrorHandler
 }
 
-func NewOrderHandler(orderUsecase *usecase.OrderUsecase) *OrderHandler {
+func NewOrderHandler(orderUsecase order.Usecase) *OrderHandler {
 	return &OrderHandler{
 		orderUsecase: orderUsecase,
 		errorHandler: errors.NewErrorHandler(),
@@ -34,12 +34,17 @@ func (h *OrderHandler) CreateOrder(c *fiber.Ctx) error {
 		return h.errorHandler.Handle(c, errors.NewValidationError("Invalid request format"))
 	}
 
-	resp, err := h.orderUsecase.CreateOrder(c.Context(), userID, &req)
+	cartID, err := uuid.Parse(req.CartID)
+	if err != nil {
+		return h.errorHandler.Handle(c, errors.NewValidationError("Invalid cart ID"))
+	}
+
+	resp, err := h.orderUsecase.CreateOrder(c.Context(), userID, cartID, req.PaymentMethod, req.ShippingAddress)
 	if err != nil {
 		switch err {
-		case usecase.ErrCartNotFound:
+		case order.ErrCartNotFound:
 			return h.errorHandler.Handle(c, errors.NewNotFoundError(err.Error()))
-		case usecase.ErrCartEmpty:
+		case order.ErrCartEmpty:
 			return h.errorHandler.Handle(c, errors.NewValidationError(err.Error()))
 		default:
 			return h.errorHandler.Handle(c, errors.NewInternalError(err))
@@ -64,7 +69,7 @@ func (h *OrderHandler) GetOrder(c *fiber.Ctx) error {
 	resp, err := h.orderUsecase.GetOrder(c.Context(), userID, orderID)
 	if err != nil {
 		switch err {
-		case usecase.ErrOrderNotFound:
+		case order.ErrNotFound:
 			return h.errorHandler.Handle(c, errors.NewNotFoundError(err.Error()))
 		default:
 			return h.errorHandler.Handle(c, errors.NewInternalError(err))
@@ -94,21 +99,21 @@ func (h *OrderHandler) ListOrders(c *fiber.Ctx) error {
 		req.PageSize = 10
 	}
 
-	resp, err := h.orderUsecase.ListOrders(c.Context(), userID, &req)
+	resp, total, err := h.orderUsecase.ListOrders(c.Context(), userID, int32(req.Page), int32(req.PageSize), req.Status)
 	if err != nil {
 		return h.errorHandler.Handle(c, errors.NewInternalError(err))
 	}
 
-	return httpresponse.OK(c, "Orders retrieved successfully", resp)
+	return httpresponse.OK(c, "Orders retrieved successfully", fiber.Map{
+		"orders": resp,
+		"total":  total,
+		"page":   req.Page,
+		"limit":  req.PageSize,
+	})
 }
 
 // UpdateOrderStatus handles PUT /orders/:id/status request
 func (h *OrderHandler) UpdateOrderStatus(c *fiber.Ctx) error {
-	userID, err := uuid.Parse(c.Locals("user_id").(string))
-	if err != nil {
-		return h.errorHandler.Handle(c, errors.NewValidationError("Invalid user ID"))
-	}
-
 	orderID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return h.errorHandler.Handle(c, errors.NewValidationError("Invalid order ID"))
@@ -119,14 +124,16 @@ func (h *OrderHandler) UpdateOrderStatus(c *fiber.Ctx) error {
 		return h.errorHandler.Handle(c, errors.NewValidationError("Invalid request format"))
 	}
 
-	resp, err := h.orderUsecase.UpdateOrderStatus(c.Context(), userID, orderID, &req)
+	resp, err := h.orderUsecase.UpdateOrderStatus(c.Context(), orderID, order.Status(req.Status))
 	if err != nil {
 		switch err {
-		case usecase.ErrOrderNotFound:
+		case order.ErrNotFound:
 			return h.errorHandler.Handle(c, errors.NewNotFoundError(err.Error()))
-		case usecase.ErrStatusTransition:
+		case order.ErrInvalidStatus:
 			return h.errorHandler.Handle(c, errors.NewValidationError(err.Error()))
-		case usecase.ErrOrderAlreadyFinal:
+		case order.ErrStatusTransition:
+			return h.errorHandler.Handle(c, errors.NewValidationError(err.Error()))
+		case order.ErrOrderAlreadyFinal:
 			return h.errorHandler.Handle(c, errors.NewConflictError(err.Error()))
 		default:
 			return h.errorHandler.Handle(c, errors.NewInternalError(err))

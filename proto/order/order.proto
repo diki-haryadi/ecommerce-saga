@@ -1,0 +1,116 @@
+syntax = "proto3";
+
+package order;
+
+option go_package = "github.com/diki-haryadi/ecommerce-saga/internal/features/order/delivery/grpc/proto";
+
+import "google/protobuf/timestamp.proto";
+
+// OrderItem represents a single item in an order
+message OrderItem {
+  string id = 1;
+  string product_id = 2;
+  int32 quantity = 3;
+  double price = 4;
+  double subtotal = 5;
+}
+
+// Order represents an order
+message Order {
+  string id = 1;
+  string user_id = 2;
+  repeated OrderItem items = 3;
+  double total = 4;
+  string status = 5;
+  string payment_method = 6;
+  string payment_id = 7;
+  string shipping_address = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+// CreateOrderRequest represents the request to create an order
+message CreateOrderRequest {
+  string user_id = 1;
+  string cart_id = 2;
+  string payment_method = 3;
+  string shipping_address = 4;
+}
+
+// CreateOrderResponse represents the response after creating an order
+message CreateOrderResponse {
+  bool success = 1;
+  string message = 2;
+  Order order = 3;
+}
+
+// GetOrderRequest represents the request to get an order
+message GetOrderRequest {
+  string user_id = 1;
+  string order_id = 2;
+}
+
+// GetOrderResponse represents the response containing order details
+message GetOrderResponse {
+  Order order = 1;
+}
+
+// ListOrdersRequest represents the request to list orders
+message ListOrdersRequest {
+  string user_id = 1;
+  int32 page = 2;
+  int32 limit = 3;
+  string status = 4;
+}
+
+// ListOrdersResponse represents the response containing a list of orders
+message ListOrdersResponse {
+  repeated Order orders = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 limit = 4;
+}
+
+// CancelOrderRequest represents the request to cancel an order
+message CancelOrderRequest {
+  string user_id = 1;
+  string order_id = 2;
+  string reason = 3;
+}
+
+// CancelOrderResponse represents the response after canceling an order
+message CancelOrderResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// UpdateOrderStatusRequest represents the request to update an order's status
+message UpdateOrderStatusRequest {
+  string order_id = 1;
+  string status = 2;
+}
+
+// UpdateOrderStatusResponse represents the response after updating an order's status
+message UpdateOrderStatusResponse {
+  bool success = 1;
+  string message = 2;
+  Order order = 3;
+}
+
+// OrderService defines the gRPC service for order operations
+service OrderService {
+  // CreateOrder creates a new order from the user's cart
+  rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse);
+
+  // GetOrder retrieves an order by ID
+  rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);
+
+  // ListOrders retrieves a list of orders for a user
+  rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse);
+
+  // CancelOrder cancels an order
+  rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
+
+  // UpdateOrderStatus updates the status of an order
+  rpc UpdateOrderStatus(UpdateOrderStatusRequest) returns (UpdateOrderStatusResponse);
+} 
