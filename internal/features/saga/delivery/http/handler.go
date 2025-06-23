@@ -1,21 +1,23 @@
 package http
 
 import (
-	"net/http"
-
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/saga/usecase"
+	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/http/errors"
+	httpresponse "github.com/diki-haryadi/ecommerce-saga/internal/pkg/http/response"
 )
 
 type SagaHandler struct {
-	sagaUsecase *usecase.SagaUsecase
+	sagaUsecase  *usecase.SagaUsecase
+	errorHandler errors.ErrorHandler
 }
 
 func NewSagaHandler(sagaUsecase *usecase.SagaUsecase) *SagaHandler {
 	return &SagaHandler{
-		sagaUsecase: sagaUsecase,
+		sagaUsecase:  sagaUsecase,
+		errorHandler: errors.NewErrorHandler(),
 	}
 }
 
@@ -23,12 +25,12 @@ func NewSagaHandler(sagaUsecase *usecase.SagaUsecase) *SagaHandler {
 func (h *SagaHandler) StartOrderPaymentSaga(c *fiber.Ctx) error {
 	orderID, err := uuid.Parse(c.Query("order_id"))
 	if err != nil {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid order ID"})
+		return h.errorHandler.Handle(c, errors.NewValidationError("Invalid order ID"))
 	}
 
 	if err := h.sagaUsecase.StartOrderPaymentSaga(c.Context(), orderID); err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to start saga"})
+		return h.errorHandler.Handle(c, errors.NewInternalError(err))
 	}
 
-	return c.SendStatus(http.StatusAccepted)
+	return httpresponse.OK(c, "Saga started successfully", nil)
 }

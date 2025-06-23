@@ -5,19 +5,22 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/auth/dto/request"
-	"github.com/diki-haryadi/ecommerce-saga/internal/features/auth/dto/response"
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/auth/usecase"
+	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/http/errors"
+	httpresponse "github.com/diki-haryadi/ecommerce-saga/internal/pkg/http/response"
 )
 
 // AuthHandler handles HTTP requests for authentication
 type AuthHandler struct {
-	authUsecase usecase.AuthUsecase
+	authUsecase  usecase.AuthUsecase
+	errorHandler errors.ErrorHandler
 }
 
 // NewAuthHandler creates a new auth handler
 func NewAuthHandler(authUsecase usecase.AuthUsecase) *AuthHandler {
 	return &AuthHandler{
-		authUsecase: authUsecase,
+		authUsecase:  authUsecase,
+		errorHandler: errors.NewErrorHandler(),
 	}
 }
 
@@ -40,61 +43,45 @@ func RegisterRoutes(router fiber.Router, handler *AuthHandler, jwtSecret []byte)
 func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	var req request.RegisterRequest
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(response.ErrorResponse{
-			Error: "Invalid request format",
-		})
+		return h.errorHandler.Handle(c, errors.NewValidationError("Invalid request format"))
 	}
 
 	if err := h.authUsecase.Register(req.Email, req.Password); err != nil {
 		switch err {
 		case usecase.ErrUserExists:
-			return c.Status(fiber.StatusConflict).JSON(response.ErrorResponse{
-				Error: err.Error(),
-			})
+			return h.errorHandler.Handle(c, errors.NewConflictError(err.Error()))
 		case usecase.ErrInvalidCredentials:
-			return c.Status(fiber.StatusBadRequest).JSON(response.ErrorResponse{
-				Error: err.Error(),
-			})
+			return h.errorHandler.Handle(c, errors.NewValidationError(err.Error()))
 		default:
-			return c.Status(fiber.StatusInternalServerError).JSON(response.ErrorResponse{
-				Error: "Internal server error",
-			})
+			return h.errorHandler.Handle(c, errors.NewInternalError(err))
 		}
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(response.SuccessResponse{
-		Message: "User registered successfully",
-	})
+	return httpresponse.Created(c, "User registered successfully", nil)
 }
 
 // Login handles POST /auth/login request
 func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	var req request.LoginRequest
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(response.ErrorResponse{
-			Error: "Invalid request format",
-		})
+		return h.errorHandler.Handle(c, errors.NewValidationError("Invalid request format"))
 	}
 
 	tokens, err := h.authUsecase.Login(req.Email, req.Password)
 	if err != nil {
 		switch err {
 		case usecase.ErrInvalidCredentials:
-			return c.Status(fiber.StatusUnauthorized).JSON(response.ErrorResponse{
-				Error: err.Error(),
-			})
+			return h.errorHandler.Handle(c, errors.NewAuthenticationError(err.Error()))
 		default:
-			return c.Status(fiber.StatusInternalServerError).JSON(response.ErrorResponse{
-				Error: "Internal server error",
-			})
+			return h.errorHandler.Handle(c, errors.NewInternalError(err))
 		}
 	}
 
-	return c.JSON(response.AuthResponse{
-		AccessToken:  tokens.AccessToken,
-		RefreshToken: tokens.RefreshToken,
-		TokenType:    "Bearer",
-		ExpiresIn:    3600, // 1 hour
+	return httpresponse.OK(c, "Login successful", fiber.Map{
+		"access_token":  tokens.AccessToken,
+		"refresh_token": tokens.RefreshToken,
+		"token_type":    "Bearer",
+		"expires_in":    3600, // 1 hour
 	})
 }
 
@@ -102,30 +89,24 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 	var req request.RefreshTokenRequest
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(response.ErrorResponse{
-			Error: "Invalid request format",
-		})
+		return h.errorHandler.Handle(c, errors.NewValidationError("Invalid request format"))
 	}
 
 	tokens, err := h.authUsecase.RefreshToken(req.Token)
 	if err != nil {
 		switch err {
 		case usecase.ErrInvalidToken:
-			return c.Status(fiber.StatusUnauthorized).JSON(response.ErrorResponse{
-				Error: err.Error(),
-			})
+			return h.errorHandler.Handle(c, errors.NewAuthenticationError(err.Error()))
 		default:
-			return c.Status(fiber.StatusInternalServerError).JSON(response.ErrorResponse{
-				Error: "Internal server error",
-			})
+			return h.errorHandler.Handle(c, errors.NewInternalError(err))
 		}
 	}
 
-	return c.JSON(response.AuthResponse{
-		AccessToken:  tokens.AccessToken,
-		RefreshToken: tokens.RefreshToken,
-		TokenType:    "Bearer",
-		ExpiresIn:    3600, // 1 hour
+	return httpresponse.OK(c, "Token refreshed successfully", fiber.Map{
+		"access_token":  tokens.AccessToken,
+		"refresh_token": tokens.RefreshToken,
+		"token_type":    "Bearer",
+		"expires_in":    3600, // 1 hour
 	})
 }
 
@@ -134,50 +115,36 @@ func (h *AuthHandler) UpdatePassword(c *fiber.Ctx) error {
 	userIDStr := c.Locals("user_id").(string)
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(response.ErrorResponse{
-			Error: "Invalid user ID",
-		})
+		return h.errorHandler.Handle(c, errors.NewAuthenticationError("Invalid user ID"))
 	}
 
 	var req request.UpdatePasswordRequest
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(response.ErrorResponse{
-			Error: "Invalid request format",
-		})
+		return h.errorHandler.Handle(c, errors.NewValidationError("Invalid request format"))
 	}
 
 	if err := h.authUsecase.UpdatePassword(userID, req.CurrentPassword, req.NewPassword); err != nil {
 		switch err {
 		case usecase.ErrUserNotFound:
-			return c.Status(fiber.StatusNotFound).JSON(response.ErrorResponse{
-				Error: err.Error(),
-			})
+			return h.errorHandler.Handle(c, errors.NewNotFoundError(err.Error()))
 		case usecase.ErrInvalidCredentials:
-			return c.Status(fiber.StatusUnauthorized).JSON(response.ErrorResponse{
-				Error: err.Error(),
-			})
+			return h.errorHandler.Handle(c, errors.NewAuthenticationError(err.Error()))
 		default:
-			return c.Status(fiber.StatusInternalServerError).JSON(response.ErrorResponse{
-				Error: "Internal server error",
-			})
+			return h.errorHandler.Handle(c, errors.NewInternalError(err))
 		}
 	}
 
-	return c.JSON(response.SuccessResponse{
-		Message: "Password updated successfully",
-	})
+	return httpresponse.OK(c, "Password updated successfully", nil)
 }
 
 // GetJWKS returns the JWKS (JSON Web Key Set)
 func (h *AuthHandler) GetJWKS(c *fiber.Ctx) error {
 	jwks, err := h.authUsecase.GetJWKS()
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(response.ErrorResponse{
-			Error: "Failed to get JWKS",
-		})
+		return h.errorHandler.Handle(c, errors.NewInternalError(err))
 	}
 
-	return c.JSON(fiber.Map{
+	return httpresponse.OK(c, "JWKS retrieved successfully", fiber.Map{
 		"keys": jwks,
 	})
 }
