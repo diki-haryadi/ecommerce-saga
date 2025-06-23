@@ -1,0 +1,102 @@
+app:
+  name: "ecommerce-saga"
+  environment: "development"
+  host: "localhost"
+  port: 8080
+
+database:
+  host: "localhost"
+  port: 5432
+  user: "postgres"
+  password: "postgres"
+  dbname: "ecommerce_dev"
+  sslmode: "disable"
+
+mongodb:
+  uri: "mongodb://localhost:27017"
+  database: "ecommerce_dev"
+  username: ""
+  password: ""
+
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+  db: 0
+
+jwt:
+  secret: "your-development-secret-key"
+  access_token_ttl: 3600
+  refresh_token_ttl: 86400
+  signing_algorithm: "HS256"
+
+logger:
+  level: "debug"
+  format: "console"
+  output_path: "stdout"
+
+monitoring:
+  enabled: true
+  metrics_path: "/metrics"
+  host: "localhost"
+  port: 9090
+
+brokers:
+  default: "kafka:default"
+  kafka:
+    default:
+      enabled: true
+      host: "localhost"
+      port: "9092"
+      username: ""
+      password: ""
+      options:
+        auto.offset.reset: "earliest"
+        group.id: "ecommerce-group"
+    events:
+      enabled: true
+      host: "localhost"
+      port: "9093"
+      username: ""
+      password: ""
+      options:
+        auto.offset.reset: "latest"
+        group.id: "events-group"
+  
+  nsq:
+    default:
+      enabled: true
+      host: "localhost"
+      port: "4150"
+      username: ""
+      password: ""
+      options:
+        max_in_flight: 100
+    notifications:
+      enabled: true
+      host: "localhost"
+      port: "4151"
+      username: ""
+      password: ""
+      options:
+        max_in_flight: 50
+  
+  nats:
+    default:
+      enabled: true
+      host: "localhost"
+      port: "4222"
+      username: ""
+      password: ""
+      options:
+        max_reconnects: -1
+        reconnect_wait: 1000
+    streaming:
+      enabled: true
+      host: "localhost"
+      port: "4223"
+      username: ""
+      password: ""
+      options:
+        cluster_id: "test-cluster"
+        client_id: "ecommerce-client" 

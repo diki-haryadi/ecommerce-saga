@@ -1,0 +1,123 @@
+app:
+  name: "ecommerce-saga"
+  environment: "production"
+  host: "0.0.0.0"
+  port: 8080
+
+server:
+  port: 80
+
+database:
+  host: "${DB_HOST}"
+  port: ${DB_PORT}
+  user: "${DB_USER}"
+  password: "${DB_PASSWORD}"
+  dbname: "${DB_NAME}"
+  sslmode: "verify-full"
+
+mongodb:
+  uri: "${MONGODB_URI}"
+  database: "${MONGODB_DATABASE}"
+  username: "${MONGODB_USER}"
+  password: "${MONGODB_PASSWORD}"
+
+redis:
+  host: "${REDIS_HOST}"
+  port: ${REDIS_PORT}
+  password: "${REDIS_PASSWORD}"
+  db: 0
+
+jwt:
+  secret: "${JWT_SECRET}"
+  access_token_ttl: 1800
+  refresh_token_ttl: 86400
+  signing_algorithm: "RS256"
+
+logger:
+  level: "info"
+  format: "json"
+  output_path: "/var/log/ecommerce/app.log"
+
+monitoring:
+  enabled: true
+  metrics_path: "/metrics"
+  host: "0.0.0.0"
+  port: 9090
+
+brokers:
+  default: "kafka:default"
+  kafka:
+    default:
+      enabled: true
+      host: "${KAFKA_HOST}"
+      port: "${KAFKA_PORT}"
+      username: "${KAFKA_USER}"
+      password: "${KAFKA_PASSWORD}"
+      options:
+        auto.offset.reset: "latest"
+        group.id: "ecommerce-group"
+        security.protocol: "SASL_SSL"
+        sasl.mechanism: "PLAIN"
+    events:
+      enabled: true
+      host: "${KAFKA_EVENTS_HOST}"
+      port: "${KAFKA_EVENTS_PORT}"
+      username: "${KAFKA_EVENTS_USER}"
+      password: "${KAFKA_EVENTS_PASSWORD}"
+      options:
+        auto.offset.reset: "latest"
+        group.id: "events-group"
+        security.protocol: "SASL_SSL"
+        sasl.mechanism: "PLAIN"
+  
+  nsq:
+    default:
+      enabled: true
+      host: "${NSQ_HOST}"
+      port: "${NSQ_PORT}"
+      username: "${NSQ_USER}"
+      password: "${NSQ_PASSWORD}"
+      options:
+        max_in_flight: 500
+        tls_v1: true
+    notifications:
+      enabled: true
+      host: "${NSQ_NOTIFICATIONS_HOST}"
+      port: "${NSQ_NOTIFICATIONS_PORT}"
+      username: "${NSQ_NOTIFICATIONS_USER}"
+      password: "${NSQ_NOTIFICATIONS_PASSWORD}"
+      options:
+        max_in_flight: 200
+        tls_v1: true
+  
+  nats:
+    default:
+      enabled: true
+      host: "${NATS_HOST}"
+      port: "${NATS_PORT}"
+      username: "${NATS_USER}"
+      password: "${NATS_PASSWORD}"
+      options:
+        max_reconnects: 10
+        reconnect_wait: 5000
+        tls_required: true
+    streaming:
+      enabled: true
+      host: "${NATS_STREAMING_HOST}"
+      port: "${NATS_STREAMING_PORT}"
+      username: "${NATS_STREAMING_USER}"
+      password: "${NATS_STREAMING_PASSWORD}"
+      options:
+        cluster_id: "prod-cluster"
+        client_id: "ecommerce-client"
+        tls_required: true
+
+messagebrokers:
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+  kafka:
+    brokers: ${KAFKA_BROKERS}
+  nsq:
+    lookupd_address: ${NSQ_LOOKUPD_ADDR}
+  nats:
+    url: ${NATS_URL} 
