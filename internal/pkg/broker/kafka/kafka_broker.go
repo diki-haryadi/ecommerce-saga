@@ -8,21 +8,21 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/google/uuid"
 
-	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/messaging"
+	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/messaging/types"
 )
 
 type KafkaBroker struct {
 	producer sarama.SyncProducer
 	consumer sarama.Consumer
-	config   *messaging.BrokerConfig
-	handlers map[string]messaging.MessageHandler
+	config   *types.BrokerConfig
+	handlers map[string]types.MessageHandler
 }
 
 // NewKafkaBroker creates a new Kafka broker instance
-func NewKafkaBroker(config *messaging.BrokerConfig) *KafkaBroker {
+func NewKafkaBroker(config *types.BrokerConfig) *KafkaBroker {
 	return &KafkaBroker{
 		config:   config,
-		handlers: make(map[string]messaging.MessageHandler),
+		handlers: make(map[string]types.MessageHandler),
 	}
 }
 
@@ -63,7 +63,7 @@ func (k *KafkaBroker) Close() error {
 }
 
 // Publish publishes a message to a Kafka topic
-func (k *KafkaBroker) Publish(ctx context.Context, topic string, msg *messaging.Message) error {
+func (k *KafkaBroker) Publish(ctx context.Context, topic string, msg *types.Message) error {
 	if msg.ID == "" {
 		msg.ID = uuid.New().String()
 	}
@@ -95,7 +95,7 @@ func (k *KafkaBroker) Publish(ctx context.Context, topic string, msg *messaging.
 }
 
 // Subscribe subscribes to a Kafka topic
-func (k *KafkaBroker) Subscribe(ctx context.Context, topic string, handler messaging.MessageHandler) error {
+func (k *KafkaBroker) Subscribe(ctx context.Context, topic string, handler types.MessageHandler) error {
 	partitionConsumer, err := k.consumer.ConsumePartition(topic, 0, sarama.OffsetNewest)
 	if err != nil {
 		return fmt.Errorf("failed to create partition consumer: %w", err)
@@ -107,7 +107,7 @@ func (k *KafkaBroker) Subscribe(ctx context.Context, topic string, handler messa
 		for {
 			select {
 			case msg := <-partitionConsumer.Messages():
-				message := &messaging.Message{
+				message := &types.Message{
 					ID:          string(msg.Key),
 					Topic:       msg.Topic,
 					Payload:     msg.Value,
@@ -142,12 +142,5 @@ func (k *KafkaBroker) Unsubscribe(ctx context.Context, topic string) error {
 
 // IsHealthy checks if the Kafka connection is healthy
 func (k *KafkaBroker) IsHealthy(ctx context.Context) bool {
-	// Check if producer and consumer are initialized
-	if k.producer == nil || k.consumer == nil {
-		return false
-	}
-
-	// Try to list topics as a health check
-	_, err := k.consumer.Topics()
-	return err == nil
+	return k.producer != nil && k.consumer != nil
 }

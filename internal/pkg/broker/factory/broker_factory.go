@@ -3,11 +3,11 @@ package factory
 import (
 	"fmt"
 
+	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/broker/kafka"
+	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/broker/nats"
+	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/broker/nsq"
 	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/config"
-	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/messaging"
-	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/messaging/kafka"
-	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/messaging/nats"
-	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/messaging/nsq"
+	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/messaging/types"
 )
 
 // BrokerType represents the type of message broker
@@ -21,7 +21,7 @@ const (
 
 // BrokerFactory creates message brokers
 type BrokerFactory interface {
-	CreateBroker(instanceName string) (messaging.MessageBroker, error)
+	CreateBroker(instanceName string) (types.MessageBroker, error)
 }
 
 // KafkaBrokerFactory creates Kafka brokers
@@ -54,7 +54,7 @@ func NewBrokerFactory(brokerType BrokerType, config *config.BrokersConfig) Broke
 }
 
 // CreateBroker creates a new Kafka broker instance
-func (f *KafkaBrokerFactory) CreateBroker(instanceName string) (messaging.MessageBroker, error) {
+func (f *KafkaBrokerFactory) CreateBroker(instanceName string) (types.MessageBroker, error) {
 	brokerConfig, ok := f.config.Kafka[instanceName]
 	if !ok {
 		return nil, fmt.Errorf("kafka broker instance '%s' not found in config", instanceName)
@@ -64,7 +64,7 @@ func (f *KafkaBrokerFactory) CreateBroker(instanceName string) (messaging.Messag
 		return nil, fmt.Errorf("kafka broker instance '%s' is disabled", instanceName)
 	}
 
-	return kafka.NewKafkaBroker(&messaging.BrokerConfig{
+	return kafka.NewKafkaBroker(&types.BrokerConfig{
 		Host:     brokerConfig.Host,
 		Port:     brokerConfig.Port,
 		Username: brokerConfig.Username,
@@ -74,7 +74,7 @@ func (f *KafkaBrokerFactory) CreateBroker(instanceName string) (messaging.Messag
 }
 
 // CreateBroker creates a new NSQ broker instance
-func (f *NSQBrokerFactory) CreateBroker(instanceName string) (messaging.MessageBroker, error) {
+func (f *NSQBrokerFactory) CreateBroker(instanceName string) (types.MessageBroker, error) {
 	brokerConfig, ok := f.config.NSQ[instanceName]
 	if !ok {
 		return nil, fmt.Errorf("nsq broker instance '%s' not found in config", instanceName)
@@ -84,7 +84,7 @@ func (f *NSQBrokerFactory) CreateBroker(instanceName string) (messaging.MessageB
 		return nil, fmt.Errorf("nsq broker instance '%s' is disabled", instanceName)
 	}
 
-	return nsq.NewNSQBroker(&messaging.BrokerConfig{
+	return nsq.NewNSQBroker(&types.BrokerConfig{
 		Host:     brokerConfig.Host,
 		Port:     brokerConfig.Port,
 		Username: brokerConfig.Username,
@@ -94,7 +94,7 @@ func (f *NSQBrokerFactory) CreateBroker(instanceName string) (messaging.MessageB
 }
 
 // CreateBroker creates a new NATS broker instance
-func (f *NATSBrokerFactory) CreateBroker(instanceName string) (messaging.MessageBroker, error) {
+func (f *NATSBrokerFactory) CreateBroker(instanceName string) (types.MessageBroker, error) {
 	brokerConfig, ok := f.config.NATS[instanceName]
 	if !ok {
 		return nil, fmt.Errorf("nats broker instance '%s' not found in config", instanceName)
@@ -104,7 +104,7 @@ func (f *NATSBrokerFactory) CreateBroker(instanceName string) (messaging.Message
 		return nil, fmt.Errorf("nats broker instance '%s' is disabled", instanceName)
 	}
 
-	return nats.NewNATSBroker(&messaging.BrokerConfig{
+	return nats.NewNATSBroker(&types.BrokerConfig{
 		Host:     brokerConfig.Host,
 		Port:     brokerConfig.Port,
 		Username: brokerConfig.Username,

@@ -8,21 +8,21 @@ import (
 	"github.com/google/uuid"
 	"github.com/nsqio/go-nsq"
 
-	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/messaging"
+	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/messaging/types"
 )
 
 type NSQBroker struct {
 	producer *nsq.Producer
 	consumer *nsq.Consumer
-	config   *messaging.BrokerConfig
-	handlers map[string]messaging.MessageHandler
+	config   *types.BrokerConfig
+	handlers map[string]types.MessageHandler
 }
 
 // NewNSQBroker creates a new NSQ broker instance
-func NewNSQBroker(config *messaging.BrokerConfig) *NSQBroker {
+func NewNSQBroker(config *types.BrokerConfig) *NSQBroker {
 	return &NSQBroker{
 		config:   config,
-		handlers: make(map[string]messaging.MessageHandler),
+		handlers: make(map[string]types.MessageHandler),
 	}
 }
 
@@ -54,7 +54,7 @@ func (n *NSQBroker) Close() error {
 }
 
 // Publish publishes a message to an NSQ topic
-func (n *NSQBroker) Publish(ctx context.Context, topic string, msg *messaging.Message) error {
+func (n *NSQBroker) Publish(ctx context.Context, topic string, msg *types.Message) error {
 	if msg.ID == "" {
 		msg.ID = uuid.New().String()
 	}
@@ -71,7 +71,7 @@ func (n *NSQBroker) Publish(ctx context.Context, topic string, msg *messaging.Me
 }
 
 // Subscribe subscribes to an NSQ topic
-func (n *NSQBroker) Subscribe(ctx context.Context, topic string, handler messaging.MessageHandler) error {
+func (n *NSQBroker) Subscribe(ctx context.Context, topic string, handler types.MessageHandler) error {
 	config := nsq.NewConfig()
 	config.MaxInFlight = 10
 
@@ -81,11 +81,11 @@ func (n *NSQBroker) Subscribe(ctx context.Context, topic string, handler messagi
 	}
 
 	consumer.AddHandler(nsq.HandlerFunc(func(msg *nsq.Message) error {
-		message := &messaging.Message{
+		message := &types.Message{
 			ID:          uuid.New().String(),
 			Topic:       topic,
 			Payload:     msg.Body,
-			PublishedAt: msg.Timestamp.UnixNano(),
+			PublishedAt: msg.Timestamp,
 			Headers:     make(map[string]string),
 		}
 

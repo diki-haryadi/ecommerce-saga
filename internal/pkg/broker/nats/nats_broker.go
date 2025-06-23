@@ -3,26 +3,27 @@ package nats
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 
-	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/messaging"
+	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/messaging/types"
 )
 
 type NATSBroker struct {
 	conn     *nats.Conn
-	config   *messaging.BrokerConfig
-	handlers map[string]messaging.MessageHandler
+	config   *types.BrokerConfig
+	handlers map[string]types.MessageHandler
 	subs     map[string]*nats.Subscription
 }
 
 // NewNATSBroker creates a new NATS broker instance
-func NewNATSBroker(config *messaging.BrokerConfig) *NATSBroker {
+func NewNATSBroker(config *types.BrokerConfig) *NATSBroker {
 	return &NATSBroker{
 		config:   config,
-		handlers: make(map[string]messaging.MessageHandler),
+		handlers: make(map[string]types.MessageHandler),
 		subs:     make(map[string]*nats.Subscription),
 	}
 }
@@ -63,7 +64,7 @@ func (n *NATSBroker) Close() error {
 }
 
 // Publish publishes a message to a NATS subject
-func (n *NATSBroker) Publish(ctx context.Context, subject string, msg *messaging.Message) error {
+func (n *NATSBroker) Publish(ctx context.Context, subject string, msg *types.Message) error {
 	if msg.ID == "" {
 		msg.ID = uuid.New().String()
 	}
@@ -96,9 +97,9 @@ func (n *NATSBroker) Publish(ctx context.Context, subject string, msg *messaging
 }
 
 // Subscribe subscribes to a NATS subject
-func (n *NATSBroker) Subscribe(ctx context.Context, subject string, handler messaging.MessageHandler) error {
+func (n *NATSBroker) Subscribe(ctx context.Context, subject string, handler types.MessageHandler) error {
 	sub, err := n.conn.Subscribe(subject, func(msg *nats.Msg) {
-		message := &messaging.Message{
+		message := &types.Message{
 			ID:      msg.Header.Get("message_id"),
 			Topic:   msg.Subject,
 			Payload: msg.Data,
@@ -112,7 +113,9 @@ func (n *NATSBroker) Subscribe(ctx context.Context, subject string, handler mess
 
 		// Extract published timestamp
 		if ts := msg.Header.Get("published_at"); ts != "" {
-			if timestamp, err := fmt.Sscanf(ts, "%d", &message.PublishedAt); err != nil {
+			if publishedAt, err := strconv.ParseInt(ts, 10, 64); err == nil {
+				message.PublishedAt = publishedAt
+			} else {
 				message.PublishedAt = time.Now().UnixNano()
 			}
 		}

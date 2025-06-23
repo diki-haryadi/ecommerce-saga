@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/broker/factory"
 	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/config"
-	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/messaging/factory"
+	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/messaging/types"
 )
 
 // BrokerManager manages multiple message broker instances
 type BrokerManager struct {
 	config    *config.BrokersConfig
-	brokers   map[string]MessageBroker
+	brokers   map[string]types.MessageBroker
 	mutex     sync.RWMutex
 	factories map[factory.BrokerType]factory.BrokerFactory
 }
@@ -21,7 +22,7 @@ type BrokerManager struct {
 func NewBrokerManager(config *config.BrokersConfig) *BrokerManager {
 	manager := &BrokerManager{
 		config:    config,
-		brokers:   make(map[string]MessageBroker),
+		brokers:   make(map[string]types.MessageBroker),
 		factories: make(map[factory.BrokerType]factory.BrokerFactory),
 	}
 
@@ -34,7 +35,7 @@ func NewBrokerManager(config *config.BrokersConfig) *BrokerManager {
 }
 
 // GetBroker returns a broker instance by name and type
-func (m *BrokerManager) GetBroker(brokerType factory.BrokerType, instanceName string) (MessageBroker, error) {
+func (m *BrokerManager) GetBroker(brokerType factory.BrokerType, instanceName string) (types.MessageBroker, error) {
 	m.mutex.RLock()
 	broker, exists := m.brokers[getBrokerKey(brokerType, instanceName)]
 	m.mutex.RUnlock()
@@ -47,7 +48,7 @@ func (m *BrokerManager) GetBroker(brokerType factory.BrokerType, instanceName st
 }
 
 // GetDefaultBroker returns the default broker instance
-func (m *BrokerManager) GetDefaultBroker() (MessageBroker, error) {
+func (m *BrokerManager) GetDefaultBroker() (types.MessageBroker, error) {
 	if m.config.Default == "" {
 		return nil, fmt.Errorf("no default broker configured")
 	}
@@ -62,7 +63,7 @@ func (m *BrokerManager) GetDefaultBroker() (MessageBroker, error) {
 }
 
 // createBroker creates a new broker instance
-func (m *BrokerManager) createBroker(brokerType factory.BrokerType, instanceName string) (MessageBroker, error) {
+func (m *BrokerManager) createBroker(brokerType factory.BrokerType, instanceName string) (types.MessageBroker, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
