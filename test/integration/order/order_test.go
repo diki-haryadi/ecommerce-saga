@@ -21,7 +21,7 @@ func TestOrderRepository(t *testing.T) {
 	// Clean up tables before test
 	require.NoError(t, tdb.TruncateTables("orders"))
 
-	// Initialize repository
+	// Initialize postgres
 	orderRepo := postgres.NewOrderRepository(tdb.DB)
 
 	t.Run("create and retrieve order", func(t *testing.T) {

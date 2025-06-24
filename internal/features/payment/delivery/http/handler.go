@@ -1,128 +1,193 @@
 package http
 
 import (
+	"github.com/diki-haryadi/ecommerce-saga/internal/features/payment/domain/usecase"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-
-	"github.com/diki-haryadi/ecommerce-saga/internal/features/payment/domain/entity"
-	"github.com/diki-haryadi/ecommerce-saga/internal/features/payment/dto/request"
-	"github.com/diki-haryadi/ecommerce-saga/internal/features/payment/usecase"
-	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/http/errors"
-	httpresponse "github.com/diki-haryadi/ecommerce-saga/internal/pkg/http/response"
 )
 
 type PaymentHandler struct {
-	paymentUsecase *usecase.PaymentUsecase
-	errorHandler   errors.ErrorHandler
+	useCase usecase.Usecase
 }
 
-func NewPaymentHandler(paymentUsecase *usecase.PaymentUsecase) *PaymentHandler {
+func NewPaymentHandler(useCase usecase.Usecase) *PaymentHandler {
 	return &PaymentHandler{
-		paymentUsecase: paymentUsecase,
-		errorHandler:   errors.NewErrorHandler(),
+		useCase: useCase,
 	}
 }
 
-// ProcessPayment handles POST /payments request
-func (h *PaymentHandler) ProcessPayment(c *fiber.Ctx) error {
-	var req request.ProcessPaymentRequest
+type CreatePaymentRequest struct {
+	OrderID       uuid.UUID `json:"order_id" validate:"required"`
+	Amount        float64   `json:"amount" validate:"required,gt=0"`
+	Currency      string    `json:"currency" validate:"required,len=3"`
+	PaymentMethod string    `json:"payment_method" validate:"required"`
+}
+
+type ProcessPaymentRequest struct {
+	CardNumber  string `json:"card_number" validate:"required,creditcard"`
+	ExpiryMonth string `json:"expiry_month" validate:"required,len=2"`
+	ExpiryYear  string `json:"expiry_year" validate:"required,len=2"`
+	CVV         string `json:"cvv" validate:"required,len=3"`
+	HolderName  string `json:"holder_name" validate:"required"`
+}
+
+type RefundPaymentRequest struct {
+	Amount float64 `json:"amount" validate:"required,gt=0"`
+	Reason string  `json:"reason" validate:"required"`
+}
+
+func (h *PaymentHandler) CreatePayment(c *fiber.Ctx) error {
+	var req CreatePaymentRequest
 	if err := c.BodyParser(&req); err != nil {
-		return h.errorHandler.Handle(c, errors.NewValidationError("Invalid request format"))
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
 	}
 
-	payment, err := h.paymentUsecase.ProcessPayment(c.Context(), &req)
+	payment, err := h.useCase.CreatePayment(c.Context(), req.OrderID, req.Amount, req.Currency, req.PaymentMethod)
 	if err != nil {
-		switch err {
-		case usecase.ErrOrderNotFound:
-			return h.errorHandler.Handle(c, errors.NewNotFoundError(err.Error()))
-		case usecase.ErrInvalidProvider:
-			return h.errorHandler.Handle(c, errors.NewValidationError(err.Error()))
-		default:
-			return h.errorHandler.Handle(c, errors.NewInternalError(err))
+		if err == payment.ErrOrderNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": err.Error(),
+			})
 		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to create payment",
+		})
 	}
 
-	return httpresponse.Created(c, "Payment processed successfully", payment)
+	return c.Status(fiber.StatusCreated).JSON(payment)
 }
 
-// GetPayment handles GET /payments/:id request
 func (h *PaymentHandler) GetPayment(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		return h.errorHandler.Handle(c, errors.NewValidationError("Invalid payment ID"))
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid payment ID",
+		})
 	}
 
-	payment, err := h.paymentUsecase.GetPayment(c.Context(), id)
+	payment, err := h.useCase.GetPayment(c.Context(), id)
 	if err != nil {
-		if err == usecase.ErrPaymentNotFound {
-			return h.errorHandler.Handle(c, errors.NewNotFoundError(err.Error()))
+		if err == payment.ErrNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": err.Error(),
+			})
 		}
-		return h.errorHandler.Handle(c, errors.NewInternalError(err))
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to get payment",
+		})
 	}
 
-	return httpresponse.OK(c, "Payment retrieved successfully", payment)
+	return c.JSON(payment)
 }
 
-// GetPaymentByOrder handles GET /payments/order/:id request
-func (h *PaymentHandler) GetPaymentByOrder(c *fiber.Ctx) error {
-	orderID, err := uuid.Parse(c.Params("id"))
+func (h *PaymentHandler) ListPayments(c *fiber.Ctx) error {
+	userID, err := uuid.Parse(c.Query("user_id"))
 	if err != nil {
-		return h.errorHandler.Handle(c, errors.NewValidationError("Invalid order ID"))
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid user ID",
+		})
 	}
 
-	payment, err := h.paymentUsecase.GetPaymentByOrder(c.Context(), orderID)
+	page := c.QueryInt("page", 1)
+	limit := c.QueryInt("limit", 10)
+	status := c.Query("status")
+
+	payments, total, err := h.useCase.ListPayments(c.Context(), userID, int32(page), int32(limit), status)
 	if err != nil {
-		if err == usecase.ErrPaymentNotFound {
-			return h.errorHandler.Handle(c, errors.NewNotFoundError(err.Error()))
-		}
-		return h.errorHandler.Handle(c, errors.NewInternalError(err))
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to list payments",
+		})
 	}
 
-	return httpresponse.OK(c, "Payment retrieved successfully", payment)
+	return c.JSON(fiber.Map{
+		"data": payments,
+		"meta": fiber.Map{
+			"total": total,
+			"page":  page,
+			"limit": limit,
+		},
+	})
 }
 
-// UpdatePaymentStatus handles PUT /payments/:id/status request
-func (h *PaymentHandler) UpdatePaymentStatus(c *fiber.Ctx) error {
+func (h *PaymentHandler) ProcessPayment(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		return h.errorHandler.Handle(c, errors.NewValidationError("Invalid payment ID"))
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid payment ID",
+		})
 	}
 
-	var req request.UpdatePaymentStatusRequest
+	var req ProcessPaymentRequest
 	if err := c.BodyParser(&req); err != nil {
-		return h.errorHandler.Handle(c, errors.NewValidationError("Invalid request format"))
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
 	}
 
-	payment, err := h.paymentUsecase.UpdatePaymentStatus(c.Context(), id, &req)
+	details := &usecase.PaymentDetails{
+		CardNumber:  req.CardNumber,
+		ExpiryMonth: req.ExpiryMonth,
+		ExpiryYear:  req.ExpiryYear,
+		CVV:         req.CVV,
+		HolderName:  req.HolderName,
+	}
+
+	payment, err := h.useCase.ProcessPayment(c.Context(), id, details)
 	if err != nil {
-		switch err {
-		case usecase.ErrPaymentNotFound:
-			return h.errorHandler.Handle(c, errors.NewNotFoundError(err.Error()))
-		case usecase.ErrStatusTransition, usecase.ErrPaymentCompleted:
-			return h.errorHandler.Handle(c, errors.NewValidationError(err.Error()))
-		default:
-			return h.errorHandler.Handle(c, errors.NewInternalError(err))
+		if err == payment.ErrNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": err.Error(),
+			})
 		}
+		if err == payment.ErrInvalidStatus {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to process payment",
+		})
 	}
 
-	return httpresponse.OK(c, "Payment status updated successfully", payment)
+	return c.JSON(payment)
 }
 
-// HandleWebhook handles POST /payments/webhook/:provider request
-func (h *PaymentHandler) HandleWebhook(c *fiber.Ctx) error {
-	provider := entity.PaymentProvider(c.Params("provider"))
-	signature := c.Get("X-Webhook-Signature")
-
-	payload := c.Body()
-
-	if err := h.paymentUsecase.HandleWebhook(c.Context(), provider, payload, signature); err != nil {
-		switch err {
-		case usecase.ErrInvalidProvider:
-			return h.errorHandler.Handle(c, errors.NewValidationError(err.Error()))
-		default:
-			return h.errorHandler.Handle(c, errors.NewInternalError(err))
-		}
+func (h *PaymentHandler) RefundPayment(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid payment ID",
+		})
 	}
 
-	return httpresponse.OK(c, "Webhook processed successfully", nil)
+	var req RefundPaymentRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	payment, reason, err := h.useCase.RefundPayment(c.Context(), id, req.Amount, req.Reason)
+	if err != nil {
+		if err == payment.ErrNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+		if err == payment.ErrInvalidStatus {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to refund payment",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"payment": payment,
+		"reason":  reason,
+	})
 }

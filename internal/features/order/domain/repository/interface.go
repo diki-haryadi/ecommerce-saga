@@ -30,4 +30,7 @@ type OrderRepository interface {
 
 	// CountByUserID counts total orders for a user
 	CountByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
+
+	// Setup creates necessary indexes for the order table
+	Setup(ctx context.Context) error
 }

@@ -3,14 +3,15 @@ package usecase
 import (
 	"context"
 	"errors"
+	orderRepo "github.com/diki-haryadi/ecommerce-saga/internal/features/order/domain/repository"
+	"github.com/diki-haryadi/ecommerce-saga/internal/features/payment/domain/usecase"
+	"time"
 
 	"github.com/google/uuid"
 
-	orderRepo "github.com/diki-haryadi/ecommerce-saga/internal/features/order/repository"
-	"github.com/diki-haryadi/ecommerce-saga/internal/features/payment/domain/entity"
-	"github.com/diki-haryadi/ecommerce-saga/internal/features/payment/dto/request"
-	"github.com/diki-haryadi/ecommerce-saga/internal/features/payment/dto/response"
-	"github.com/diki-haryadi/ecommerce-saga/internal/features/payment/repository"
+	"github.com/diki-haryadi/ecommerce-saga/internal/features/payment"
+	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/eventbus"
+	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/payment/provider"
 )
 
 var (
@@ -28,90 +29,160 @@ var (
 
 // PaymentProvider defines the interface for payment providers
 type PaymentProvider interface {
-	ProcessPayment(ctx context.Context, payment *entity.Payment) error
+	ProcessPayment(ctx context.Context, payment *payment.Payment) error
 	ValidateWebhook(payload []byte, signature string) error
 }
 
 type PaymentUsecase struct {
-	paymentRepo      repository.PaymentRepository
-	orderRepo        orderRepo.OrderRepository
-	paymentProviders map[entity.PaymentProvider]PaymentProvider
+	paymentRepo     usecase.Repository
+	orderRepo       orderRepo.OrderRepository
+	paymentProvider provider.PaymentProvider
+	eventBus        *eventbus.EventBus
 }
 
+// NewPaymentUsecase creates a new payment usecase
 func NewPaymentUsecase(
-	paymentRepo repository.PaymentRepository,
+	paymentRepo usecase.Repository,
 	orderRepo orderRepo.OrderRepository,
-	providers map[entity.PaymentProvider]PaymentProvider,
-) *PaymentUsecase {
+	paymentProvider provider.PaymentProvider,
+	eventBus *eventbus.EventBus,
+) usecase.Usecase {
 	return &PaymentUsecase{
-		paymentRepo:      paymentRepo,
-		orderRepo:        orderRepo,
-		paymentProviders: providers,
+		paymentRepo:     paymentRepo,
+		orderRepo:       orderRepo,
+		paymentProvider: paymentProvider,
+		eventBus:        eventBus,
 	}
 }
 
-// ProcessPayment processes a new payment for an order
-func (u *PaymentUsecase) ProcessPayment(ctx context.Context, req *request.ProcessPaymentRequest) (*response.PaymentResponse, error) {
-	// Get order
-	order, err := u.orderRepo.GetByID(ctx, req.OrderID)
+// CreatePayment creates a new payment
+func (u *PaymentUsecase) CreatePayment(ctx context.Context, orderID uuid.UUID, amount float64, currency, paymentMethod string) (*usecase.PaymentResponse, error) {
+	// Validate order exists
+	order, err := u.orderRepo.GetByID(ctx, orderID)
 	if err != nil {
 		return nil, err
 	}
 	if order == nil {
-		return nil, ErrOrderNotFound
+		return nil, usecase.ErrOrderNotFound
 	}
 
-	// Check if payment already exists
-	existingPayment, err := u.paymentRepo.GetByOrderID(ctx, req.OrderID)
-	if err != nil {
+	// Create payment record
+	p := &usecase.PaymentResponse{
+		ID:             uuid.New(),
+		OrderID:        orderID,
+		UserID:         order.UserID,
+		Amount:         amount,
+		Currency:       currency,
+		usecase.Status: usecase.StatusPending,
+		PaymentMethod:  paymentMethod,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}
+
+	if err := u.paymentRepo.Create(ctx, p); err != nil {
 		return nil, err
 	}
-	if existingPayment != nil {
-		return response.NewPaymentResponse(existingPayment), nil
-	}
 
-	// Create payment
-	provider := entity.PaymentProvider(req.Provider)
-	payment := entity.NewPayment(req.OrderID, order.TotalAmount, "USD", provider)
-
-	// Save payment
-	if err := u.paymentRepo.Create(ctx, payment); err != nil {
-		return nil, err
-	}
-
-	// Get payment provider
-	paymentProvider, ok := u.paymentProviders[provider]
-	if !ok {
-		return nil, ErrInvalidProvider
-	}
-
-	// Process payment asynchronously
-	go func() {
-		ctx := context.Background()
-		if err := paymentProvider.ProcessPayment(ctx, payment); err != nil {
-			payment.SetError(err.Error())
-			u.paymentRepo.Update(ctx, payment)
-		}
-	}()
-
-	return response.NewPaymentResponse(payment), nil
+	return p, nil
 }
 
 // GetPayment retrieves a payment by ID
-func (u *PaymentUsecase) GetPayment(ctx context.Context, id uuid.UUID) (*response.PaymentResponse, error) {
-	payment, err := u.paymentRepo.GetByID(ctx, id)
+func (u *PaymentUsecase) GetPayment(ctx context.Context, paymentID uuid.UUID) (*usecase.PaymentResponse, error) {
+	p, err := u.paymentRepo.GetByID(ctx, paymentID)
 	if err != nil {
 		return nil, err
 	}
-	if payment == nil {
-		return nil, ErrPaymentNotFound
+	if p == nil {
+		return nil, usecase.ErrNotFound
+	}
+	return p, nil
+}
+
+// ListPayments retrieves a list of payments
+func (u *PaymentUsecase) ListPayments(ctx context.Context, userID uuid.UUID, page, limit int32, status string) ([]*usecase.PaymentResponse, int64, error) {
+	return u.paymentRepo.List(ctx, userID, page, limit, status)
+}
+
+// ProcessPayment processes a payment
+func (u *PaymentUsecase) ProcessPayment(ctx context.Context, paymentID uuid.UUID, details *usecase.PaymentDetails) (*usecase.PaymentResponse, error) {
+	p, err := u.paymentRepo.GetByID(ctx, paymentID)
+	if err != nil {
+		return nil, err
+	}
+	if p == nil {
+		return nil, usecase.ErrNotFound
 	}
 
-	return response.NewPaymentResponse(payment), nil
+	if p.Status != usecase.StatusPending {
+		return nil, usecase.ErrInvalidStatus
+	}
+
+	// Process payment with provider
+	providerTxID, err := u.paymentProvider.ProcessPayment(ctx, details, p.Amount)
+	if err != nil {
+		p.Status = usecase.StatusFailed
+		_ = u.paymentRepo.Update(ctx, p)
+		return nil, err
+	}
+
+	p.Status = usecase.StatusCompleted
+	p.ProviderTransactionID = providerTxID
+	p.UpdatedAt = time.Now()
+
+	if err := u.paymentRepo.Update(ctx, p); err != nil {
+		return nil, err
+	}
+
+	// Publish payment completed event
+	u.eventBus.Publish("payment.completed", map[string]interface{}{
+		"payment_id": p.ID,
+		"order_id":   p.OrderID,
+		"amount":     p.Amount,
+		"status":     p.Status,
+	})
+
+	return p, nil
+}
+
+// RefundPayment processes a refund
+func (u *PaymentUsecase) RefundPayment(ctx context.Context, paymentID uuid.UUID, amount float64, reason string) (*usecase.PaymentResponse, string, error) {
+	p, err := u.paymentRepo.GetByID(ctx, paymentID)
+	if err != nil {
+		return nil, "", err
+	}
+	if p == nil {
+		return nil, "", usecase.ErrNotFound
+	}
+
+	if p.Status != usecase.StatusCompleted {
+		return nil, "", usecase.ErrInvalidStatus
+	}
+
+	// Process refund with provider
+	if err := u.paymentProvider.RefundPayment(ctx, p.ProviderTransactionID, amount); err != nil {
+		return nil, "", err
+	}
+
+	p.Status = usecase.StatusRefunded
+	p.UpdatedAt = time.Now()
+
+	if err := u.paymentRepo.Update(ctx, p); err != nil {
+		return nil, "", err
+	}
+
+	// Publish refund completed event
+	u.eventBus.Publish("payment.refunded", map[string]interface{}{
+		"payment_id": p.ID,
+		"order_id":   p.OrderID,
+		"amount":     amount,
+		"reason":     reason,
+	})
+
+	return p, reason, nil
 }
 
 // GetPaymentByOrder retrieves a payment by order ID
-func (u *PaymentUsecase) GetPaymentByOrder(ctx context.Context, orderID uuid.UUID) (*response.PaymentResponse, error) {
+func (u *PaymentUsecase) GetPaymentByOrder(ctx context.Context, orderID uuid.UUID) (*usecase.PaymentResponse, error) {
 	payment, err := u.paymentRepo.GetByOrderID(ctx, orderID)
 	if err != nil {
 		return nil, err
@@ -120,11 +191,11 @@ func (u *PaymentUsecase) GetPaymentByOrder(ctx context.Context, orderID uuid.UUI
 		return nil, ErrPaymentNotFound
 	}
 
-	return response.NewPaymentResponse(payment), nil
+	return payment, nil
 }
 
 // UpdatePaymentStatus updates the status of a payment
-func (u *PaymentUsecase) UpdatePaymentStatus(ctx context.Context, id uuid.UUID, req *request.UpdatePaymentStatusRequest) (*response.PaymentResponse, error) {
+func (u *PaymentUsecase) UpdatePaymentStatus(ctx context.Context, id uuid.UUID, req *payment.UpdatePaymentStatusRequest) (*usecase.PaymentResponse, error) {
 	// Get payment
 	payment, err := u.paymentRepo.GetByID(ctx, id)
 	if err != nil {
@@ -135,7 +206,7 @@ func (u *PaymentUsecase) UpdatePaymentStatus(ctx context.Context, id uuid.UUID, 
 	}
 
 	// Validate status transition
-	newStatus := entity.PaymentStatus(req.Status)
+	newStatus := payment.PaymentStatus(req.Status)
 	if !payment.CanTransitionTo(newStatus) {
 		if payment.IsCompleted() {
 			return nil, ErrPaymentCompleted
@@ -154,27 +225,5 @@ func (u *PaymentUsecase) UpdatePaymentStatus(ctx context.Context, id uuid.UUID, 
 		return nil, err
 	}
 
-	return response.NewPaymentResponse(payment), nil
-}
-
-// HandleWebhook handles payment provider webhook
-func (u *PaymentUsecase) HandleWebhook(ctx context.Context, provider entity.PaymentProvider, payload []byte, signature string) error {
-	// Get payment provider
-	paymentProvider, ok := u.paymentProviders[provider]
-	if !ok {
-		return ErrInvalidProvider
-	}
-
-	// Validate webhook
-	if err := paymentProvider.ValidateWebhook(payload, signature); err != nil {
-		return err
-	}
-
-	// Process webhook asynchronously
-	go func() {
-		// Implementation depends on provider-specific webhook format
-		// Update payment status based on webhook data
-	}()
-
-	return nil
+	return payment, nil
 }

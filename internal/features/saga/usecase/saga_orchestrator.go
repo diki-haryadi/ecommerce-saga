@@ -63,7 +63,7 @@ func (o *SagaOrchestrator) StartOrderPaymentSaga(ctx context.Context, orderID uu
 	saga.Timeout = o.stepTimeout
 	saga.MaxRetries = o.maxRetries
 
-	// Save saga to repository
+	// Save saga to postgres
 	if err := o.sagaRepo.Create(ctx, saga); err != nil {
 		return fmt.Errorf("failed to create saga: %w", err)
 	}

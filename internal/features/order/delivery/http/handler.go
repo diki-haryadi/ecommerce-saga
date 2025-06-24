@@ -1,21 +1,21 @@
 package http
 
 import (
+	"github.com/diki-haryadi/ecommerce-saga/internal/features/order/domain/usecase"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
-	"github.com/diki-haryadi/ecommerce-saga/internal/features/order"
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/order/dto/request"
 	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/http/errors"
 	httpresponse "github.com/diki-haryadi/ecommerce-saga/internal/pkg/http/response"
 )
 
 type OrderHandler struct {
-	orderUsecase order.Usecase
+	orderUsecase usecase.Usecase
 	errorHandler errors.ErrorHandler
 }
 
-func NewOrderHandler(orderUsecase order.Usecase) *OrderHandler {
+func NewOrderHandler(orderUsecase usecase.Usecase) *OrderHandler {
 	return &OrderHandler{
 		orderUsecase: orderUsecase,
 		errorHandler: errors.NewErrorHandler(),
@@ -42,9 +42,9 @@ func (h *OrderHandler) CreateOrder(c *fiber.Ctx) error {
 	resp, err := h.orderUsecase.CreateOrder(c.Context(), userID, cartID, req.PaymentMethod, req.ShippingAddress)
 	if err != nil {
 		switch err {
-		case order.ErrCartNotFound:
+		case usecase.ErrCartNotFound:
 			return h.errorHandler.Handle(c, errors.NewNotFoundError(err.Error()))
-		case order.ErrCartEmpty:
+		case usecase.ErrCartEmpty:
 			return h.errorHandler.Handle(c, errors.NewValidationError(err.Error()))
 		default:
 			return h.errorHandler.Handle(c, errors.NewInternalError(err))
@@ -69,7 +69,7 @@ func (h *OrderHandler) GetOrder(c *fiber.Ctx) error {
 	resp, err := h.orderUsecase.GetOrder(c.Context(), userID, orderID)
 	if err != nil {
 		switch err {
-		case order.ErrNotFound:
+		case usecase.ErrNotFound:
 			return h.errorHandler.Handle(c, errors.NewNotFoundError(err.Error()))
 		default:
 			return h.errorHandler.Handle(c, errors.NewInternalError(err))
@@ -124,16 +124,16 @@ func (h *OrderHandler) UpdateOrderStatus(c *fiber.Ctx) error {
 		return h.errorHandler.Handle(c, errors.NewValidationError("Invalid request format"))
 	}
 
-	resp, err := h.orderUsecase.UpdateOrderStatus(c.Context(), orderID, order.Status(req.Status))
+	resp, err := h.orderUsecase.UpdateOrderStatus(c.Context(), orderID, usecase.Status(req.Status))
 	if err != nil {
 		switch err {
-		case order.ErrNotFound:
+		case usecase.ErrNotFound:
 			return h.errorHandler.Handle(c, errors.NewNotFoundError(err.Error()))
-		case order.ErrInvalidStatus:
+		case usecase.ErrInvalidStatus:
 			return h.errorHandler.Handle(c, errors.NewValidationError(err.Error()))
-		case order.ErrStatusTransition:
+		case usecase.ErrStatusTransition:
 			return h.errorHandler.Handle(c, errors.NewValidationError(err.Error()))
-		case order.ErrOrderAlreadyFinal:
+		case usecase.ErrOrderAlreadyFinal:
 			return h.errorHandler.Handle(c, errors.NewConflictError(err.Error()))
 		default:
 			return h.errorHandler.Handle(c, errors.NewInternalError(err))

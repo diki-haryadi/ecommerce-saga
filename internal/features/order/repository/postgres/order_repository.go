@@ -2,20 +2,20 @@ package postgres
 
 import (
 	"context"
-
+	"github.com/diki-haryadi/ecommerce-saga/internal/features/order/domain/repository"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/order/domain/entity"
 )
 
-// OrderRepository implements the repository.OrderRepository interface
+// OrderRepository implements the domain.OrderRepository interface
 type OrderRepository struct {
 	db *gorm.DB
 }
 
-// NewOrderRepository creates a new PostgreSQL order repository
-func NewOrderRepository(db *gorm.DB) *OrderRepository {
+// NewOrderRepository creates a new PostgreSQL order postgres
+func NewOrderRepository(db *gorm.DB) repository.OrderRepository {
 	return &OrderRepository{
 		db: db,
 	}

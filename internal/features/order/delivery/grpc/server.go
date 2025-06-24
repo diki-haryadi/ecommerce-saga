@@ -2,22 +2,22 @@ package grpc
 
 import (
 	"context"
+	"github.com/diki-haryadi/ecommerce-saga/internal/features/order/domain/usecase"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/diki-haryadi/ecommerce-saga/internal/features/order"
 	pb "github.com/diki-haryadi/ecommerce-saga/internal/features/order/delivery/grpc/proto"
 )
 
 type OrderServer struct {
 	pb.UnimplementedOrderServiceServer
-	orderUsecase order.Usecase
+	orderUsecase usecase.Usecase
 }
 
-func NewOrderServer(orderUsecase order.Usecase) *OrderServer {
+func NewOrderServer(orderUsecase usecase.Usecase) *OrderServer {
 	return &OrderServer{
 		orderUsecase: orderUsecase,
 	}
@@ -37,9 +37,9 @@ func (s *OrderServer) CreateOrder(ctx context.Context, req *pb.CreateOrderReques
 	orderResp, err := s.orderUsecase.CreateOrder(ctx, userID, cartID, req.PaymentMethod, req.ShippingAddress)
 	if err != nil {
 		switch err {
-		case order.ErrCartNotFound:
+		case usecase.ErrCartNotFound:
 			return nil, status.Error(codes.NotFound, err.Error())
-		case order.ErrCartEmpty:
+		case usecase.ErrCartEmpty:
 			return nil, status.Error(codes.FailedPrecondition, err.Error())
 		default:
 			return nil, status.Error(codes.Internal, "failed to create order")
@@ -67,7 +67,7 @@ func (s *OrderServer) GetOrder(ctx context.Context, req *pb.GetOrderRequest) (*p
 	orderResp, err := s.orderUsecase.GetOrder(ctx, userID, orderID)
 	if err != nil {
 		switch err {
-		case order.ErrNotFound:
+		case usecase.ErrNotFound:
 			return nil, status.Error(codes.NotFound, err.Error())
 		default:
 			return nil, status.Error(codes.Internal, "failed to get order")
@@ -117,13 +117,13 @@ func (s *OrderServer) CancelOrder(ctx context.Context, req *pb.CancelOrderReques
 	err = s.orderUsecase.CancelOrder(ctx, userID, orderID, req.Reason)
 	if err != nil {
 		switch err {
-		case order.ErrNotFound:
+		case usecase.ErrNotFound:
 			return nil, status.Error(codes.NotFound, err.Error())
-		case order.ErrCancelled:
+		case usecase.ErrCancelled:
 			return nil, status.Error(codes.FailedPrecondition, err.Error())
-		case order.ErrCompleted:
+		case usecase.ErrCompleted:
 			return nil, status.Error(codes.FailedPrecondition, err.Error())
-		case order.ErrOrderAlreadyFinal:
+		case usecase.ErrOrderAlreadyFinal:
 			return nil, status.Error(codes.FailedPrecondition, err.Error())
 		default:
 			return nil, status.Error(codes.Internal, "failed to cancel order")
@@ -142,17 +142,17 @@ func (s *OrderServer) UpdateOrderStatus(ctx context.Context, req *pb.UpdateOrder
 		return nil, status.Error(codes.InvalidArgument, "invalid order ID")
 	}
 
-	orderStatus := order.Status(req.Status)
+	orderStatus := usecase.Status(req.Status)
 	orderResp, err := s.orderUsecase.UpdateOrderStatus(ctx, orderID, orderStatus)
 	if err != nil {
 		switch err {
-		case order.ErrNotFound:
+		case usecase.ErrNotFound:
 			return nil, status.Error(codes.NotFound, err.Error())
-		case order.ErrInvalidStatus:
+		case usecase.ErrInvalidStatus:
 			return nil, status.Error(codes.InvalidArgument, err.Error())
-		case order.ErrStatusTransition:
+		case usecase.ErrStatusTransition:
 			return nil, status.Error(codes.FailedPrecondition, err.Error())
-		case order.ErrOrderAlreadyFinal:
+		case usecase.ErrOrderAlreadyFinal:
 			return nil, status.Error(codes.FailedPrecondition, err.Error())
 		default:
 			return nil, status.Error(codes.Internal, "failed to update order status")
@@ -166,7 +166,7 @@ func (s *OrderServer) UpdateOrderStatus(ctx context.Context, req *pb.UpdateOrder
 	}, nil
 }
 
-func convertOrderToPb(order *order.OrderResponse) *pb.Order {
+func convertOrderToPb(order *usecase.OrderResponse) *pb.Order {
 	pbItems := make([]*pb.OrderItem, len(order.Items))
 	for i, item := range order.Items {
 		pbItems[i] = &pb.OrderItem{

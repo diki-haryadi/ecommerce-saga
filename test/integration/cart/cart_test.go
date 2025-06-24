@@ -21,7 +21,7 @@ func TestCartRepository(t *testing.T) {
 	// Clean up tables before test
 	require.NoError(t, tdb.TruncateTables("carts", "cart_items"))
 
-	// Initialize repository
+	// Initialize postgres
 	cartRepo := postgres.NewCartRepository(tdb.DB)
 
 	t.Run("create and retrieve cart", func(t *testing.T) {

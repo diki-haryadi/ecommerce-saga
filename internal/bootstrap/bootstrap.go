@@ -3,13 +3,16 @@ package bootstrap
 import (
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
+
+	"github.com/diki-haryadi/ecommerce-saga/internal/pkg/eventbus"
 )
 
 // AppBootstrap represents the application bootstrap facade
 type AppBootstrap struct {
-	DB     *gorm.DB
-	App    *fiber.App
-	Config map[string]interface{}
+	DB       *gorm.DB
+	App      *fiber.App
+	Config   map[string]interface{}
+	EventBus *eventbus.EventBus
 }
 
 // FeatureModule interface for all feature modules
@@ -21,9 +24,10 @@ type FeatureModule interface {
 // NewAppBootstrap creates a new instance of AppBootstrap
 func NewAppBootstrap(db *gorm.DB, app *fiber.App, config map[string]interface{}) *AppBootstrap {
 	return &AppBootstrap{
-		DB:     db,
-		App:    app,
-		Config: config,
+		DB:       db,
+		App:      app,
+		Config:   config,
+		EventBus: eventbus.New(),
 	}
 }
 
@@ -48,8 +52,11 @@ func (b *AppBootstrap) createFeatureModules() []FeatureModule {
 	return []FeatureModule{
 		NewAuthModule(b.DB, b.Config),
 		NewCartModule(b.DB, b.Config),
-		NewOrderModule(b.DB, b.Config),
-		NewPaymentModule(b.DB, b.Config),
+		NewOrderModule(b.DB, &Config{
+			MaxOrderItems: b.Config["max_order_items"].(int),
+			MinOrderValue: b.Config["min_order_value"].(float64),
+		}, b.EventBus),
+		NewPaymentModule(b.DB, b.Config, b.EventBus),
 		// Add other feature modules here
 	}
 }

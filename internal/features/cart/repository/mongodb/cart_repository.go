@@ -21,7 +21,7 @@ type CartRepository struct {
 	collection *mongo.Collection
 }
 
-// NewCartRepository creates a new MongoDB cart repository
+// NewCartRepository creates a new MongoDB cart postgres
 func NewCartRepository(db *mongo.Database) *CartRepository {
 	return &CartRepository{
 		db:         db,

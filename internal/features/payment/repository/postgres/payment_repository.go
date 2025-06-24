@@ -2,10 +2,12 @@ package postgres
 
 import (
 	"context"
+	"github.com/diki-haryadi/ecommerce-saga/internal/features/payment/domain/usecase"
 
-	"github.com/diki-haryadi/ecommerce-saga/internal/features/payment/domain/entity"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	"github.com/diki-haryadi/ecommerce-saga/internal/features/payment/domain/entity"
 )
 
 // PaymentRepository implements the repository.PaymentRepository interface
@@ -13,41 +15,72 @@ type PaymentRepository struct {
 	db *gorm.DB
 }
 
-// NewPaymentRepository creates a new PostgreSQL payment repository
-func NewPaymentRepository(db *gorm.DB) *PaymentRepository {
+// NewPaymentRepository creates a new PostgreSQL payment postgres
+func NewPaymentRepository(db *gorm.DB) usecase.Repository {
 	return &PaymentRepository{
 		db: db,
 	}
 }
 
-// Create saves a new payment to the database
-func (r *PaymentRepository) Create(ctx context.Context, payment *entity.Payment) error {
+// Create creates a new payment record
+func (r *PaymentRepository) Create(ctx context.Context, payment *usecase.PaymentResponse) error {
 	return r.db.WithContext(ctx).Create(payment).Error
 }
 
-// GetByID retrieves a payment by its ID
-func (r *PaymentRepository) GetByID(ctx context.Context, id uuid.UUID) (*entity.Payment, error) {
-	var payment entity.Payment
-	err := r.db.WithContext(ctx).First(&payment, "id = ?", id).Error
-	if err != nil {
+// GetByID retrieves a payment by ID
+func (r *PaymentRepository) GetByID(ctx context.Context, id uuid.UUID) (*usecase.PaymentResponse, error) {
+	var p usecase.PaymentResponse
+	if err := r.db.WithContext(ctx).First(&p, "id = ?", id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
-	return &payment, nil
+	return &p, nil
+}
+
+// List retrieves a list of payments with pagination
+func (r *PaymentRepository) List(ctx context.Context, userID uuid.UUID, page, limit int32, status string) ([]*usecase.PaymentResponse, int64, error) {
+	var payments []*usecase.PaymentResponse
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&usecase.PaymentResponse{})
+
+	if userID != uuid.Nil {
+		query = query.Where("user_id = ?", userID)
+	}
+
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * limit
+	if err := query.Offset(int(offset)).Limit(int(limit)).Find(&payments).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return payments, total, nil
+}
+
+// Update updates a payment record
+func (r *PaymentRepository) Update(ctx context.Context, payment *usecase.PaymentResponse) error {
+	return r.db.WithContext(ctx).Save(payment).Error
 }
 
 // GetByOrderID retrieves a payment by order ID
-func (r *PaymentRepository) GetByOrderID(ctx context.Context, orderID uuid.UUID) (*entity.Payment, error) {
-	var payment entity.Payment
-	err := r.db.WithContext(ctx).First(&payment, "order_id = ?", orderID).Error
-	if err != nil {
+func (r *PaymentRepository) GetByOrderID(ctx context.Context, orderID uuid.UUID) (*usecase.PaymentResponse, error) {
+	var p usecase.PaymentResponse
+	if err := r.db.WithContext(ctx).First(&p, "order_id = ?", orderID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
-	return &payment, nil
-}
-
-// Update updates an existing payment in the database
-func (r *PaymentRepository) Update(ctx context.Context, payment *entity.Payment) error {
-	return r.db.WithContext(ctx).Save(payment).Error
+	return &p, nil
 }
 
 // UpdateStatus updates the payment status

@@ -1,22 +1,20 @@
 package http
 
 import (
+	"github.com/diki-haryadi/ecommerce-saga/internal/features/payment/domain/usecase"
 	"github.com/gofiber/fiber/v2"
 )
 
-// RegisterRoutes registers all payment-related routes
-func RegisterRoutes(router fiber.Router, handler *PaymentHandler, authMiddleware fiber.Handler) {
-	payments := router.Group("/payments")
+// RegisterRoutes registers payment routes
+func RegisterRoutes(router fiber.Router, useCase usecase.Usecase) {
+	handler := NewPaymentHandler(useCase)
 
-	// Protected routes
-	protected := payments.Group("")
-	protected.Use(authMiddleware)
-
-	protected.Post("", handler.ProcessPayment)
-	protected.Get("/:id", handler.GetPayment)
-	protected.Get("/order/:id", handler.GetPaymentByOrder)
-	protected.Put("/:id/status", handler.UpdatePaymentStatus)
-
-	// Webhook routes (unprotected)
-	payments.Post("/webhook/:provider", handler.HandleWebhook)
+	paymentGroup := router.Group("/payments")
+	{
+		paymentGroup.Post("/", handler.CreatePayment)
+		paymentGroup.Get("/:id", handler.GetPayment)
+		paymentGroup.Get("/", handler.ListPayments)
+		paymentGroup.Post("/:id/process", handler.ProcessPayment)
+		paymentGroup.Post("/:id/refund", handler.RefundPayment)
+	}
 }

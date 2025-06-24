@@ -2,22 +2,22 @@ package grpc
 
 import (
 	"context"
+	"github.com/diki-haryadi/ecommerce-saga/internal/features/payment/domain/usecase"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/diki-haryadi/ecommerce-saga/internal/features/payment"
 	pb "github.com/diki-haryadi/ecommerce-saga/internal/features/payment/delivery/grpc/proto"
 )
 
 type PaymentServer struct {
 	pb.UnimplementedPaymentServiceServer
-	paymentUsecase payment.Usecase
+	paymentUsecase usecase.Usecase
 }
 
-func NewPaymentServer(paymentUsecase payment.Usecase) *PaymentServer {
+func NewPaymentServer(paymentUsecase usecase.Usecase) *PaymentServer {
 	return &PaymentServer{
 		paymentUsecase: paymentUsecase,
 	}
@@ -33,9 +33,9 @@ func (s *PaymentServer) CreatePayment(ctx context.Context, req *pb.CreatePayment
 	if err != nil {
 		var errStatus error
 		switch err {
-		case payment.ErrOrderNotFound:
+		case usecase.ErrOrderNotFound:
 			errStatus = status.Error(codes.NotFound, err.Error())
-		case payment.ErrInvalidProvider:
+		case usecase.ErrInvalidProvider:
 			errStatus = status.Error(codes.InvalidArgument, err.Error())
 		default:
 			errStatus = status.Error(codes.Internal, "failed to create payment")
@@ -60,7 +60,7 @@ func (s *PaymentServer) GetPayment(ctx context.Context, req *pb.GetPaymentReques
 	if err != nil {
 		var errStatus error
 		switch err {
-		case payment.ErrNotFound:
+		case usecase.ErrNotFound:
 			errStatus = status.Error(codes.NotFound, err.Error())
 		default:
 			errStatus = status.Error(codes.Internal, "failed to get payment")
@@ -108,7 +108,7 @@ func (s *PaymentServer) ProcessPayment(ctx context.Context, req *pb.ProcessPayme
 		return nil, status.Error(codes.InvalidArgument, "invalid payment ID")
 	}
 
-	details := &payment.PaymentDetails{
+	details := &usecase.PaymentDetails{
 		CardNumber:  req.PaymentDetails.CardNumber,
 		ExpiryMonth: req.PaymentDetails.ExpiryMonth,
 		ExpiryYear:  req.PaymentDetails.ExpiryYear,
@@ -120,11 +120,11 @@ func (s *PaymentServer) ProcessPayment(ctx context.Context, req *pb.ProcessPayme
 	if err != nil {
 		var errStatus error
 		switch err {
-		case payment.ErrNotFound:
+		case usecase.ErrNotFound:
 			errStatus = status.Error(codes.NotFound, err.Error())
-		case payment.ErrCompleted:
+		case usecase.ErrCompleted:
 			errStatus = status.Error(codes.FailedPrecondition, err.Error())
-		case payment.ErrProviderUnavailable:
+		case usecase.ErrProviderUnavailable:
 			errStatus = status.Error(codes.Unavailable, err.Error())
 		default:
 			errStatus = status.Error(codes.Internal, "failed to process payment")
@@ -150,11 +150,11 @@ func (s *PaymentServer) RefundPayment(ctx context.Context, req *pb.RefundPayment
 	if err != nil {
 		var errStatus error
 		switch err {
-		case payment.ErrNotFound:
+		case usecase.ErrNotFound:
 			errStatus = status.Error(codes.NotFound, err.Error())
-		case payment.ErrInvalidStatus:
+		case usecase.ErrInvalidStatus:
 			errStatus = status.Error(codes.FailedPrecondition, err.Error())
-		case payment.ErrProviderUnavailable:
+		case usecase.ErrProviderUnavailable:
 			errStatus = status.Error(codes.Unavailable, err.Error())
 		default:
 			errStatus = status.Error(codes.Internal, "failed to refund payment")
@@ -170,7 +170,7 @@ func (s *PaymentServer) RefundPayment(ctx context.Context, req *pb.RefundPayment
 	}, nil
 }
 
-func convertPaymentToPb(p *payment.PaymentResponse) *pb.Payment {
+func convertPaymentToPb(p *usecase.PaymentResponse) *pb.Payment {
 	return &pb.Payment{
 		Id:            p.ID.String(),
 		OrderId:       p.OrderID.String(),

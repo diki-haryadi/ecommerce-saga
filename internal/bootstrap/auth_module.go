@@ -38,7 +38,7 @@ func (m *AuthModule) Initialize() error {
 	}
 	m.jwkService = jwkService
 
-	// Initialize repository
+	// Initialize postgres
 	userRepo := postgres.NewUserRepository(m.db)
 
 	// Initialize usecase

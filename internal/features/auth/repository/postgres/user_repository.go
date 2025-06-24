@@ -15,7 +15,7 @@ type UserRepository struct {
 	db *gorm.DB
 }
 
-// NewUserRepository creates a new PostgreSQL user repository
+// NewUserRepository creates a new PostgreSQL user postgres
 func NewUserRepository(db *gorm.DB) *UserRepository {
 	return &UserRepository{
 		db: db,

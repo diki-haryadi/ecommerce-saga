@@ -33,7 +33,7 @@ go mod init github.com/your-org/cart-service
 
 # Create directory structure
 mkdir -p api/proto \
-        internal/{delivery/grpc,usecase,repository,domain} \
+        internal/{delivery/grpc,usecase,postgres,domain} \
         cmd/server \
         config \
         deployments

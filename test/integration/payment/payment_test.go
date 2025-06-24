@@ -21,7 +21,7 @@ func TestPaymentRepository(t *testing.T) {
 	// Clean up tables before test
 	require.NoError(t, tdb.TruncateTables("payments"))
 
-	// Initialize repository
+	// Initialize postgres
 	paymentRepo := postgres.NewPaymentRepository(tdb.DB)
 
 	t.Run("create and retrieve payment", func(t *testing.T) {

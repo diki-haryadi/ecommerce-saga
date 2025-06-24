@@ -14,7 +14,7 @@ type SagaRepository struct {
 	db *gorm.DB
 }
 
-// NewSagaRepository creates a new PostgreSQL saga repository
+// NewSagaRepository creates a new PostgreSQL saga postgres
 func NewSagaRepository(db *gorm.DB) *SagaRepository {
 	return &SagaRepository{
 		db: db,

@@ -3,13 +3,13 @@ package usecase
 import (
 	"context"
 	"errors"
+	"github.com/diki-haryadi/ecommerce-saga/internal/features/order/domain/repository"
+	"github.com/diki-haryadi/ecommerce-saga/internal/features/order/domain/usecase"
 
 	"github.com/google/uuid"
 
 	cartRepo "github.com/diki-haryadi/ecommerce-saga/internal/features/cart/repository"
-	"github.com/diki-haryadi/ecommerce-saga/internal/features/order"
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/order/domain/entity"
-	"github.com/diki-haryadi/ecommerce-saga/internal/features/order/repository"
 )
 
 var (
@@ -38,22 +38,22 @@ func NewOrderUsecase(orderRepo repository.OrderRepository, cartRepo cartRepo.Car
 }
 
 // CreateOrder creates a new order from a cart
-func (u *OrderUsecase) CreateOrder(ctx context.Context, userID, cartID uuid.UUID, paymentMethod, shippingAddress string) (*order.OrderResponse, error) {
+func (u *OrderUsecase) CreateOrder(ctx context.Context, userID, cartID uuid.UUID, paymentMethod, shippingAddress string) (*usecase.OrderResponse, error) {
 	// Get cart
 	cart, err := u.cartRepo.GetByID(ctx, cartID)
 	if err != nil {
 		return nil, err
 	}
 	if cart == nil {
-		return nil, order.ErrCartNotFound
+		return nil, usecase.ErrCartNotFound
 	}
 
 	// Validate cart
 	if len(cart.Items) == 0 {
-		return nil, order.ErrCartEmpty
+		return nil, usecase.ErrCartEmpty
 	}
 	if cart.UserID != userID {
-		return nil, order.ErrCartNotFound
+		return nil, usecase.ErrCartNotFound
 	}
 
 	// Create order items
@@ -82,21 +82,21 @@ func (u *OrderUsecase) CreateOrder(ctx context.Context, userID, cartID uuid.UUID
 	}
 
 	// Convert to response
-	return &order.OrderResponse{
+	return &usecase.OrderResponse{
 		ID:          newOrder.ID,
 		UserID:      newOrder.UserID,
 		Items:       u.convertItems(items),
 		TotalAmount: newOrder.TotalAmount,
-		Status:      order.Status(newOrder.Status),
+		Status:      usecase.Status(newOrder.Status),
 		CreatedAt:   newOrder.CreatedAt,
 		UpdatedAt:   newOrder.UpdatedAt,
 	}, nil
 }
 
-func (u *OrderUsecase) convertItems(items []entity.OrderItem) []order.OrderItem {
-	result := make([]order.OrderItem, len(items))
+func (u *OrderUsecase) convertItems(items []entity.OrderItem) []usecase.OrderItem {
+	result := make([]usecase.OrderItem, len(items))
 	for i, item := range items {
-		result[i] = order.OrderItem{
+		result[i] = usecase.OrderItem{
 			ID:        item.ID,
 			ProductID: item.ProductID,
 			Name:      item.Name,
@@ -109,28 +109,28 @@ func (u *OrderUsecase) convertItems(items []entity.OrderItem) []order.OrderItem 
 }
 
 // GetOrder retrieves an order by ID
-func (u *OrderUsecase) GetOrder(ctx context.Context, userID, orderID uuid.UUID) (*order.OrderResponse, error) {
+func (u *OrderUsecase) GetOrder(ctx context.Context, userID, orderID uuid.UUID) (*usecase.OrderResponse, error) {
 	orderEntity, err := u.orderRepo.GetByID(ctx, orderID)
 	if err != nil {
 		return nil, err
 	}
 	if orderEntity == nil || orderEntity.UserID != userID {
-		return nil, order.ErrNotFound
+		return nil, usecase.ErrNotFound
 	}
 
-	return &order.OrderResponse{
+	return &usecase.OrderResponse{
 		ID:          orderEntity.ID,
 		UserID:      orderEntity.UserID,
 		Items:       u.convertItems(orderEntity.Items),
 		TotalAmount: orderEntity.TotalAmount,
-		Status:      order.Status(orderEntity.Status),
+		Status:      usecase.Status(orderEntity.Status),
 		CreatedAt:   orderEntity.CreatedAt,
 		UpdatedAt:   orderEntity.UpdatedAt,
 	}, nil
 }
 
 // ListOrders retrieves a paginated list of orders for a user
-func (u *OrderUsecase) ListOrders(ctx context.Context, userID uuid.UUID, page, limit int32, status string) ([]*order.OrderResponse, int64, error) {
+func (u *OrderUsecase) ListOrders(ctx context.Context, userID uuid.UUID, page, limit int32, status string) ([]*usecase.OrderResponse, int64, error) {
 	// Get total count
 	totalRows, err := u.orderRepo.CountByUserID(ctx, userID)
 	if err != nil {
@@ -147,14 +147,14 @@ func (u *OrderUsecase) ListOrders(ctx context.Context, userID uuid.UUID, page, l
 	}
 
 	// Convert to response
-	result := make([]*order.OrderResponse, len(orders))
+	result := make([]*usecase.OrderResponse, len(orders))
 	for i, o := range orders {
-		result[i] = &order.OrderResponse{
+		result[i] = &usecase.OrderResponse{
 			ID:          o.ID,
 			UserID:      o.UserID,
 			Items:       u.convertItems(o.Items),
 			TotalAmount: o.TotalAmount,
-			Status:      order.Status(o.Status),
+			Status:      usecase.Status(o.Status),
 			CreatedAt:   o.CreatedAt,
 			UpdatedAt:   o.UpdatedAt,
 		}
@@ -164,23 +164,23 @@ func (u *OrderUsecase) ListOrders(ctx context.Context, userID uuid.UUID, page, l
 }
 
 // UpdateOrderStatus updates the status of an order
-func (u *OrderUsecase) UpdateOrderStatus(ctx context.Context, orderID uuid.UUID, status order.Status) (*order.OrderResponse, error) {
+func (u *OrderUsecase) UpdateOrderStatus(ctx context.Context, orderID uuid.UUID, status usecase.Status) (*usecase.OrderResponse, error) {
 	// Get order
 	orderEntity, err := u.orderRepo.GetByID(ctx, orderID)
 	if err != nil {
 		return nil, err
 	}
 	if orderEntity == nil {
-		return nil, order.ErrNotFound
+		return nil, usecase.ErrNotFound
 	}
 
 	// Validate status transition
 	newStatus := entity.OrderStatus(status)
 	if !orderEntity.CanTransitionTo(newStatus) {
 		if orderEntity.IsFinal() {
-			return nil, order.ErrOrderAlreadyFinal
+			return nil, usecase.ErrOrderAlreadyFinal
 		}
-		return nil, order.ErrStatusTransition
+		return nil, usecase.ErrStatusTransition
 	}
 
 	// Update status
@@ -194,13 +194,40 @@ func (u *OrderUsecase) UpdateOrderStatus(ctx context.Context, orderID uuid.UUID,
 		return nil, err
 	}
 
-	return &order.OrderResponse{
+	return &usecase.OrderResponse{
 		ID:          orderEntity.ID,
 		UserID:      orderEntity.UserID,
 		Items:       u.convertItems(orderEntity.Items),
 		TotalAmount: orderEntity.TotalAmount,
-		Status:      order.Status(orderEntity.Status),
+		Status:      usecase.Status(orderEntity.Status),
 		CreatedAt:   orderEntity.CreatedAt,
 		UpdatedAt:   orderEntity.UpdatedAt,
 	}, nil
+}
+
+// CancelOrder cancels an order if possible
+func (u *OrderUsecase) CancelOrder(ctx context.Context, userID, orderID uuid.UUID, reason string) error {
+	// Get order
+	orderEntity, err := u.orderRepo.GetByID(ctx, orderID)
+	if err != nil {
+		return err
+	}
+	if orderEntity == nil || orderEntity.UserID != userID {
+		return usecase.ErrNotFound
+	}
+
+	// Check if order can be cancelled
+	if orderEntity.Status == entity.OrderStatus(usecase.StatusCancelled) {
+		return usecase.ErrCancelled
+	}
+	if orderEntity.Status == entity.OrderStatus(usecase.StatusDelivered) {
+		return usecase.ErrCompleted
+	}
+
+	// Update status to cancelled
+	if err := u.orderRepo.UpdateStatus(ctx, orderID, entity.OrderStatus(usecase.StatusCancelled)); err != nil {
+		return err
+	}
+
+	return nil
 }

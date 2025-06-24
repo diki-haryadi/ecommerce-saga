@@ -47,7 +47,7 @@ func (s *AuthIntegrationTestSuite) SetupSuite() {
 	err = json.Unmarshal(data, &s.fixtures)
 	require.NoError(s.T(), err)
 
-	// Create repository
+	// Create postgres
 	userRepo := postgres.NewUserRepository(s.db.DB)
 
 	// Create JWK service
