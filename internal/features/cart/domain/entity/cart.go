@@ -8,6 +8,7 @@ import (
 
 // CartItem represents an item in the cart
 type CartItem struct {
+	CartID    uuid.UUID `json:"cart_id" bson:"cart_id"`
 	ProductID uuid.UUID `json:"product_id" bson:"product_id"`
 	Name      string    `json:"name" bson:"name"`
 	Price     float64   `json:"price" bson:"price"`

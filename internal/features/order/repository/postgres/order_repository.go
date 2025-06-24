@@ -92,3 +92,9 @@ func (r *OrderRepository) Setup(ctx context.Context) error {
 	`).Error
 	return err
 }
+
+func (r *OrderRepository) ListByUserID(ctx context.Context, userID uuid.UUID) ([]*entity.Order, error) {
+	var orders []*entity.Order
+	err := r.db.WithContext(ctx).Where("user_id = ?", userID).Find(&orders).Error
+	return orders, err
+}

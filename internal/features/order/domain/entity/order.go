@@ -17,6 +17,7 @@ const (
 	OrderStatusDelivered  OrderStatus = "DELIVERED"
 	OrderStatusCancelled  OrderStatus = "CANCELLED"
 	OrderStatusFailed     OrderStatus = "FAILED"
+	OrderStatusCompleted  OrderStatus = "COMPLETED"
 )
 
 // OrderItem represents an item in the order

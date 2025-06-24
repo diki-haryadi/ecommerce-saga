@@ -117,3 +117,15 @@ func (r *SagaRepository) Setup(ctx context.Context) error {
 	`).Error
 	return err
 }
+
+func (r *SagaRepository) GetByOrderID(ctx context.Context, orderID uuid.UUID) (*entity.Saga, error) {
+	var saga entity.Saga
+	err := r.db.WithContext(ctx).
+		Preload("Steps").
+		Where("order_id = ?", orderID).
+		First(&saga).Error
+	if err != nil {
+		return nil, err
+	}
+	return &saga, nil
+}
