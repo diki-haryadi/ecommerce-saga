@@ -10,4 +10,5 @@ func RegisterRoutes(router fiber.Router, handler *SagaHandler, authMiddleware fi
 	sagas.Use(authMiddleware)
 
 	sagas.Post("/order-payment", handler.StartOrderPaymentSaga)
+	sagas.Get("/:id", handler.GetSagaStatus)
 }

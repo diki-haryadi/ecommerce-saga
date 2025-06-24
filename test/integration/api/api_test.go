@@ -2,27 +2,40 @@ package api_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/diki-haryadi/ecommerce-saga/internal/features/cart/delivery/http"
-	cartEntity "github.com/diki-haryadi/ecommerce-saga/internal/features/cart/domain/entity"
+	cartHttp "github.com/diki-haryadi/ecommerce-saga/internal/features/cart/delivery/http"
 	cartRepo "github.com/diki-haryadi/ecommerce-saga/internal/features/cart/repository/postgres"
-	orderEntity "github.com/diki-haryadi/ecommerce-saga/internal/features/order/domain/entity"
+	cartUsecase "github.com/diki-haryadi/ecommerce-saga/internal/features/cart/usecase"
 	orderRepo "github.com/diki-haryadi/ecommerce-saga/internal/features/order/repository/postgres"
 	sagaHandler "github.com/diki-haryadi/ecommerce-saga/internal/features/saga/delivery/http"
 	sagaRepo "github.com/diki-haryadi/ecommerce-saga/internal/features/saga/repository/postgres"
 	"github.com/diki-haryadi/ecommerce-saga/internal/features/saga/usecase"
 	"github.com/diki-haryadi/ecommerce-saga/test/integration/testutil"
 )
+
+// MockProductService implements cartUsecase.ProductService for testing
+type MockProductService struct{}
+
+func (m *MockProductService) GetProduct(ctx context.Context, id uuid.UUID) (*cartUsecase.Product, error) {
+	return &cartUsecase.Product{
+		ID:    id,
+		Name:  "Test Product",
+		Price: 10.0,
+		Stock: 100,
+	}, nil
+}
 
 func setupTestApp(t *testing.T) (*fiber.App, *testutil.TestDB) {
 	// Setup database
@@ -39,9 +52,10 @@ func setupTestApp(t *testing.T) (*fiber.App, *testutil.TestDB) {
 	// Setup routes
 	api := app.Group("/api")
 
-	cartHandler := http.NewCartHandler(cartRepository)
+	// Initialize cart usecase and handler
+	cartUsecase := cartUsecase.NewCartUsecase(cartRepository, &MockProductService{}, 24*time.Hour)
+	cartHandler := cartHttp.NewCartHandler(cartUsecase)
 	cartGroup := api.Group("/cart")
-	cartGroup.Post("/", cartHandler.CreateCart)
 	cartGroup.Get("/:user_id", cartHandler.GetCart)
 	cartGroup.Post("/items", cartHandler.AddItem)
 	cartGroup.Delete("/:user_id", cartHandler.ClearCart)
@@ -63,40 +77,22 @@ func TestCartAPI(t *testing.T) {
 	t.Run("create and get cart", func(t *testing.T) {
 		userID := uuid.New()
 
-		// Create cart
-		createReq := fiber.Map{
-			"user_id": userID.String(),
-		}
-		req, _ := json.Marshal(createReq)
-		resp, err := app.Test(httptest.NewRequest("POST", "/api/cart", bytes.NewReader(req)))
+		// Get cart (will create if not exists)
+		resp, err := app.Test(httptest.NewRequest("GET", fmt.Sprintf("/api/cart/%s", userID), nil))
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-		// Get cart
-		resp, err = app.Test(httptest.NewRequest("GET", fmt.Sprintf("/api/cart/%s", userID), nil))
+		var cartResp map[string]interface{}
+		err = json.NewDecoder(resp.Body).Decode(&cartResp)
 		require.NoError(t, err)
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-		var cart cartEntity.Cart
-		err = json.NewDecoder(resp.Body).Decode(&cart)
-		require.NoError(t, err)
-		assert.Equal(t, userID, cart.UserID)
+		assert.NotNil(t, cartResp["data"])
 	})
 
 	t.Run("add item to cart", func(t *testing.T) {
-		// Create cart first
-		userID := uuid.New()
-		cartID := uuid.New()
-		cart := &cartEntity.Cart{
-			ID:     cartID,
-			UserID: userID,
-		}
-
+		// Add item to cart
 		addItemReq := fiber.Map{
-			"cart_id":    cartID.String(),
 			"product_id": uuid.New().String(),
 			"quantity":   2,
-			"price":      50.0,
 		}
 		req, _ := json.Marshal(addItemReq)
 		resp, err := app.Test(httptest.NewRequest("POST", "/api/cart/items", bytes.NewReader(req)))
@@ -110,14 +106,7 @@ func TestSagaAPI(t *testing.T) {
 	defer tdb.Cleanup()
 
 	t.Run("start and monitor saga", func(t *testing.T) {
-		// Create test order first
 		orderID := uuid.New()
-		order := &orderEntity.Order{
-			ID:          orderID,
-			UserID:      uuid.New(),
-			TotalAmount: 100.0,
-			Status:      orderEntity.OrderStatusPending,
-		}
 
 		// Start saga
 		req := fiber.Map{
